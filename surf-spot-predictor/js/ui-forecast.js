@@ -30,6 +30,26 @@ function isRecommendableDaylight(pt, daylightByDate){
   return minOfDay >= (day.sunriseMin - DAWN_BUFFER_MIN) && minOfDay <= (day.sunsetMin - DUSK_BUFFER_MIN);
 }
 
+// Marks which sampled points start a new calendar day, so the grid can show
+// a visible day-boundary border — with up to 6 columns/day across a week,
+// the table is wider than its container and needs a horizontal scroll that
+// isn't otherwise obvious.
+function dayStartFlags(sampledPoints){
+  let lastDate = null;
+  return sampledPoints.map(p=>{
+    const date = p.time.slice(0,10);
+    const isStart = date !== lastDate;
+    lastDate = date;
+    return isStart;
+  });
+}
+
+function scrollHintHtml(sampledPoints){
+  const dayCount = new Set(sampledPoints.map(p=>p.time.slice(0,10))).size;
+  if(dayCount<=1) return '';
+  return `<p class="buoynote" style="margin:0 0 6px;">Scroll to see all ${dayCount} days &rarr;</p>`;
+}
+
 function sampleTimeline(timeline){
   const byDate = {};
   timeline.forEach(pt=>{
@@ -105,24 +125,27 @@ function renderForecastResults(rawTimeline, tideAvailable, tideError, daylightBy
   bestBox.appendChild(list);
   resultsEl.appendChild(bestBox);
 
+  const dayStarts = dayStartFlags(sampledPoints);
+  const headerCellsHtml = sampledPoints.map((p,i)=>`<th${dayStarts[i]?' class="day-start"':''}>${formatForecastTime(p.time)}</th>`).join('');
+
   const windBox = document.createElement('div');
-  windBox.innerHTML = '<h3 class="fc-heading">Wind timeline</h3>';
+  windBox.innerHTML = '<h3 class="fc-heading">Wind timeline</h3>' + scrollHintHtml(sampledPoints);
   const windWrap = document.createElement('div');
-  windWrap.style.overflowX = 'auto';
+  windWrap.className = 'fc-scroll';
   const windTable = document.createElement('table');
   windTable.className = 'forecast-grid';
   windTable.innerHTML = `
-    <thead><tr><th class="sticky-col"></th>${sampledPoints.map(p=>`<th>${formatForecastTime(p.time)}</th>`).join('')}</tr></thead>
-    <tbody><tr><td class="sticky-col">Wind</td>${sampledPoints.map(p=>`<td>${p.windS!=null?p.windS+'mph '+dirLabel(p.windDir):'–'}</td>`).join('')}</tr></tbody>
+    <thead><tr><th class="sticky-col"></th>${headerCellsHtml}</tr></thead>
+    <tbody><tr><td class="sticky-col">Wind</td>${sampledPoints.map((p,i)=>`<td${dayStarts[i]?' class="day-start"':''}>${p.windS!=null?p.windS+'mph '+dirLabel(p.windDir):'–'}</td>`).join('')}</tr></tbody>
   `;
   windWrap.appendChild(windTable);
   windBox.appendChild(windWrap);
   resultsEl.appendChild(windBox);
 
   const gridBox = document.createElement('div');
-  gridBox.innerHTML = '<h3 class="fc-heading">Spot scores by time</h3>';
+  gridBox.innerHTML = '<h3 class="fc-heading">Spot scores by time</h3>' + scrollHintHtml(sampledPoints);
   const gridWrap = document.createElement('div');
-  gridWrap.style.overflowX = 'auto';
+  gridWrap.className = 'fc-scroll';
   const grid = document.createElement('table');
   grid.className = 'forecast-grid';
   const orderedSpots = [...spotsToScore].sort((a,b)=>{
@@ -131,12 +154,12 @@ function renderForecastResults(rawTimeline, tideAvailable, tideError, daylightBy
     return pb-pa;
   });
   grid.innerHTML = `
-    <thead><tr><th class="sticky-col"></th>${sampledPoints.map(p=>`<th>${formatForecastTime(p.time)}</th>`).join('')}</tr></thead>
+    <thead><tr><th class="sticky-col"></th>${headerCellsHtml}</tr></thead>
     <tbody>
       ${orderedSpots.map(spot=>{
-        const cells = sampledPoints.map(p=>{
+        const cells = sampledPoints.map((p,i)=>{
           const r = scoreSpot(spot, Object.assign({waveStyles: userWaveStyles}, p), sessionCache, userSkillLevel);
-          return `<td style="background:${barColor(r.score)};color:#fff;">${r.score}</td>`;
+          return `<td${dayStarts[i]?' class="day-start"':''} style="background:${barColor(r.score)};color:#fff;">${r.score}</td>`;
         }).join('');
         return `<tr><td class="sticky-col">${spot.name}</td>${cells}</tr>`;
       }).join('')}
