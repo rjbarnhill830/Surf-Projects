@@ -17,6 +17,19 @@ function formatForecastTime(iso){
 // across a full week.
 const FORECAST_SAMPLE_HOURS = [6,9,12,15,18,21];
 
+// Can't surf in the dark. Start 30 min before sunrise (enough light to check
+// and paddle out); stop recommending 90 min before sunset so there's still
+// time for an actual session before dusk, not just before full dark.
+const DAWN_BUFFER_MIN = 30;
+const DUSK_BUFFER_MIN = 90;
+
+function isRecommendableDaylight(pt, daylightByDate){
+  const day = daylightByDate[pt.time.slice(0,10)];
+  if(!day) return true; // no sunrise/sunset data (polar edge case) — don't filter
+  const minOfDay = (+pt.time.slice(11,13))*60 + (+pt.time.slice(14,16));
+  return minOfDay >= (day.sunriseMin - DAWN_BUFFER_MIN) && minOfDay <= (day.sunsetMin - DUSK_BUFFER_MIN);
+}
+
 function sampleTimeline(timeline){
   const byDate = {};
   timeline.forEach(pt=>{
@@ -44,9 +57,16 @@ function resetForecastSection(){
   document.getElementById('forecastResults').innerHTML = '';
 }
 
-function renderForecastResults(timeline, tideAvailable, tideError){
+function renderForecastResults(rawTimeline, tideAvailable, tideError, daylightByDate){
   const resultsEl = document.getElementById('forecastResults');
   resultsEl.innerHTML = '';
+  const timeline = rawTimeline.filter(pt=>isRecommendableDaylight(pt, daylightByDate));
+
+  if(timeline.length===0){
+    resultsEl.innerHTML = '<p class="empty">No daylight hours in this window (too close to dusk, or the buffers ate the whole range) — try a longer range or check back tomorrow.</p>';
+    return;
+  }
+
   const spotsToScore = activeSpots.filter(s=>!s.excluded);
   const sampledPoints = sampleTimeline(timeline);
 
@@ -148,9 +168,9 @@ function initForecastSection(){
     statusEl.textContent = 'Loading forecast…';
     document.getElementById('forecastResults').innerHTML = '';
     try{
-      const {timeline, tideAvailable, tideError} = await fetchForecastTimeline(loc, days);
-      renderForecastResults(timeline, tideAvailable, tideError);
-      statusEl.textContent = `Loaded ${timeline.length} hourly points for ${loc.label}.`;
+      const {timeline, tideAvailable, tideError, daylightByDate} = await fetchForecastTimeline(loc, days);
+      renderForecastResults(timeline, tideAvailable, tideError, daylightByDate);
+      statusEl.textContent = `Loaded ${timeline.length} hourly points for ${loc.label}, filtered to daylight (${DAWN_BUFFER_MIN}min before sunrise through ${DUSK_BUFFER_MIN}min before sunset).`;
     }catch(err){
       statusEl.textContent = `Couldn't load the forecast: ${err.message}`;
     }finally{

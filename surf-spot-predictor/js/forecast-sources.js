@@ -126,6 +126,51 @@ async function fetchTidePredictions(stationId, days){
   return points;
 }
 
+// Standard astronomical sunrise equation (public-domain math, the same
+// algorithm behind most sunrise/sunset calculators) — computed directly, no
+// API or network needed, works for any lat/lon/date. Returns UTC instants;
+// -0.83deg accounts for atmospheric refraction and the sun's apparent radius,
+// the usual definition of "sunrise/sunset" rather than the geometric horizon.
+function sunTimesUTC(year, month, day, lat, lon){
+  const rad = Math.PI/180, toDeg = 180/Math.PI;
+  const a = Math.floor((14-month)/12);
+  const y = year+4800-a;
+  const m = month+12*a-3;
+  const JDN = day + Math.floor((153*m+2)/5) + 365*y + Math.floor(y/4) - Math.floor(y/100) + Math.floor(y/400) - 32045;
+  const n = JDN - 2451545.0 + 0.0009;
+  const Jstar = n - lon/360;
+  const M = ((357.5291 + 0.98560028*Jstar) % 360 + 360) % 360;
+  const Mrad = M*rad;
+  const C = 1.9148*Math.sin(Mrad) + 0.0200*Math.sin(2*Mrad) + 0.0003*Math.sin(3*Mrad);
+  const lambda = ((M + 102.9372 + C + 180) % 360 + 360) % 360;
+  const lambdaRad = lambda*rad;
+  const Jtransit = 2451545.0 + Jstar + 0.0053*Math.sin(Mrad) - 0.0069*Math.sin(2*lambdaRad);
+  const delta = Math.asin(Math.sin(lambdaRad)*Math.sin(23.44*rad));
+  const latRad = lat*rad;
+  const cosH = (Math.sin(-0.83*rad) - Math.sin(latRad)*Math.sin(delta)) / (Math.cos(latRad)*Math.cos(delta));
+  if(cosH>1 || cosH<-1) return null; // polar day/night — not a practical case for any current zone
+  const H = Math.acos(cosH)*toDeg;
+  const Jset = 2451545.0 + (H/360 + Jstar) + 0.0053*Math.sin(Mrad) - 0.0069*Math.sin(2*lambdaRad);
+  const Jrise = Jtransit - (Jset - Jtransit);
+  const toDate = J => new Date(Math.round((J-2440587.5)*86400000));
+  return { sunrise: toDate(Jrise), sunset: toDate(Jset) };
+}
+
+// Local-clock sunrise/sunset minutes-of-day for a calendar date, using the
+// same UTC-offset trick as elsewhere: shift the UTC instant by the offset,
+// then read it back with getUTC* so the result is never reinterpreted
+// through the runtime's own timezone.
+function sunTimesLocalMinutes(dateStr, lat, lon, utcOffsetSeconds){
+  const [y,mo,d] = dateStr.split('-').map(Number);
+  const sun = sunTimesUTC(y,mo,d,lat,lon);
+  if(!sun) return null;
+  const toLocalMinutes = utcDate => {
+    const local = new Date(utcDate.getTime() + utcOffsetSeconds*1000);
+    return local.getUTCHours()*60 + local.getUTCMinutes();
+  };
+  return { sunriseMin: toLocalMinutes(sun.sunrise), sunsetMin: toLocalMinutes(sun.sunset) };
+}
+
 // Full hourly swell + wind + (where available) tide timeline for a
 // reference location, merged by timestamp into the same shape scoreSpot()
 // expects. Missing tide (no station for this zone, or the NOAA fetch
@@ -184,9 +229,16 @@ async function fetchForecastTimeline(location, days){
     };
   }).filter(Boolean);
 
+  const utcOffsetSeconds = marine.utc_offset_seconds || 0;
+  const daylightByDate = {};
+  [...new Set(timeline.map(pt=>pt.time.slice(0,10)))].forEach(dateStr=>{
+    daylightByDate[dateStr] = sunTimesLocalMinutes(dateStr, location.lat, location.lon, utcOffsetSeconds);
+  });
+
   return {
     timeline,
     tideAvailable: !!location.tideStation && !tideError,
-    tideError
+    tideError,
+    daylightByDate
   };
 }
