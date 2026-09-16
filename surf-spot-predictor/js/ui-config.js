@@ -45,10 +45,14 @@ function blankCustomSpot(){
     dir:270, dirTol:35, minH:2, maxH:8,
     windDir:90, windTol:40, maxWind:15,
     tideMin:-2, tideMax:7, minPeriod:6, maxPeriod:22,
-    tideDirection:'either', transmission:1,
+    tideDirection:'either', transmission:1, bottomType:'unknown',
     blurb:'', notes:''
   };
 }
+
+const BOTTOM_TYPE_LABELS = {
+  beach:'Beach break', reef:'Reef', point:'Point', combo:'Combo', unknown:'Unknown'
+};
 
 const dirOptions = [
   {v:0,l:"N"},{v:45,l:"NE"},{v:90,l:"E"},{v:135,l:"SE"},
@@ -67,6 +71,11 @@ function escapeHtml(s){
 function spotFieldsGridHtml(id, cur){
   return `
     <div class="cfggrid">
+      <div><label>Bottom type</label>
+        <select id="cfg-bottomtype-${id}">
+          ${Object.keys(BOTTOM_TYPE_LABELS).map(k=>`<option value="${k}" ${(cur.bottomType||'unknown')===k?'selected':''}>${BOTTOM_TYPE_LABELS[k]}</option>`).join('')}
+        </select>
+      </div>
       <div><label>Ideal swell direction</label>${dirSelect('cfg-dir-'+id,cur.dir)}</div>
       <div><label>Direction tolerance (&deg;)</label><input type="number" id="cfg-dirtol-${id}" min="10" max="90" value="${cur.dirTol}"></div>
       <div><label>Min swell height (ft)</label><input type="number" id="cfg-minh-${id}" min="0" max="15" step="0.5" value="${cur.minH}"></div>
@@ -92,6 +101,7 @@ function spotFieldsGridHtml(id, cur){
 
 function readFieldsFromForm(id){
   return {
+    bottomType: document.getElementById('cfg-bottomtype-'+id).value,
     dir: +document.getElementById('cfg-dir-'+id).value,
     dirTol: +document.getElementById('cfg-dirtol-'+id).value,
     minH: +document.getElementById('cfg-minh-'+id).value,
@@ -125,7 +135,7 @@ function renderConfigCards(){
         Include this spot in recommendations
       </label>
       ${spotFieldsGridHtml(def.id, cur)}
-      <p class="buoynote" style="margin-top:8px;">Conditions outside these swell size, period or tide ranges lower this spot's score and get flagged in the ranking &mdash; the spot still shows up as an option, just marked as outside its ideal range. Transmission scales an offshore/buoy swell height down (or up) to estimate what actually breaks here &mdash; leave at 1 until you've compared logged sessions against a forecast to calibrate it.</p>
+      <p class="buoynote" style="margin-top:8px;">Conditions outside these swell size, period or tide ranges lower this spot's score and get flagged in the ranking &mdash; the spot still shows up as an option, just marked as outside its ideal range. Transmission scales an offshore/buoy swell height down (or up) to estimate what actually breaks here &mdash; leave at 1 until you've compared logged sessions against a forecast to calibrate it. Bottom type is informational plus the basis for the min/max period range: reefs and points generally want a longer, more organized groundswell to wrap cleanly, while typical beach breaks work fine on shorter/mid period &mdash; adjust the period range directly if a spot doesn't follow that rule (Ocean Beach and Supertubos are beach breaks that are tuned as exceptions).</p>
       <div style="margin-top:14px;">
         <label>Description</label>
         <textarea id="cfg-blurb-${def.id}" style="min-height:56px;">${escapeHtml(cur.blurb||'')}</textarea>

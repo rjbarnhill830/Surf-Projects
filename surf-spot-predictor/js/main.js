@@ -33,7 +33,7 @@ function render(){
     div.innerHTML=`
       <div class="rank">${i+1}</div>
       <div class="body">
-        <div class="name">${r.spot.name}${r.tag?`<span class="badge">${r.tag} rated sessions</span>`:''}</div>
+        <div class="name">${r.spot.name}${r.spot.bottomType&&r.spot.bottomType!=='unknown'?`<span class="badge" style="background:var(--muted);">${BOTTOM_TYPE_LABELS[r.spot.bottomType]}</span>`:''}${r.tag?`<span class="badge">${r.tag} rated sessions</span>`:''}</div>
         <div class="bar"><i style="width:${r.score}%;background:${barColor(r.score)}"></i></div>
         <div class="note">${r.spot.blurb}</div>
         ${r.spot.notes ? `<div class="note" style="font-style:italic;margin-top:3px;">${r.spot.notes}</div>` : ''}

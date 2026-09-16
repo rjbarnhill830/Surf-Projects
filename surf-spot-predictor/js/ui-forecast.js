@@ -73,7 +73,7 @@ function renderForecastResults(timeline, tideAvailable, tideError){
     div.className = 'card';
     div.innerHTML = `
       <div class="body">
-        <div class="name">${pick.spot.name}</div>
+        <div class="name">${pick.spot.name}${pick.spot.bottomType&&pick.spot.bottomType!=='unknown'?`<span class="badge" style="background:var(--muted);">${BOTTOM_TYPE_LABELS[pick.spot.bottomType]}</span>`:''}</div>
         <div class="bar"><i style="width:${pick.score}%;background:${barColor(pick.score)}"></i></div>
         <div class="note">${formatForecastTime(pick.time)}</div>
       </div>
