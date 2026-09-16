@@ -42,7 +42,7 @@ function blankCustomSpot(){
     name: 'New spot',
     custom: true,
     excluded: false,
-    dirMin:240, dirMax:300, minH:2, maxH:8,
+    dirMin:240, dirMax:300, facing:270, exposure:'moderate', minH:2, maxH:8,
     windDir:90, windTol:40, maxWind:15,
     tideMin:-2, tideMax:7, minPeriod:6, maxPeriod:22,
     tideDirection:'either', transmission:1, bottomType:'unknown',
@@ -103,10 +103,38 @@ function computeWindowFromChecked(checkedDegs){
   return {min:(startPoint-11.25+360)%360, max:(endPoint+11.25)%360};
 }
 
+function syncDirCheckboxesToWindow(sid, min, max){
+  document.querySelectorAll(`.dirpoint-checkbox[data-spot-id="${sid}"]`).forEach(chk=>{
+    chk.checked = angleInWindow(+chk.dataset.deg, min, max);
+  });
+}
+
+// A beach can only receive swell from the open-ocean side of its coastline,
+// so "which way it faces" plus "how exposed it is" gives a physically
+// reasonable starting window — half-widths are rough defaults, not a
+// precise model, and the generated window is meant to be fine-tuned
+// afterward with the checkboxes or exact degrees, not treated as final.
+const EXPOSURE_HALF_WIDTH = {open:85, moderate:55, sheltered:30};
+const EXPOSURE_LABELS = {open:'Open / fully exposed', moderate:'Moderate / partially sheltered', sheltered:'Sheltered / cove or bay'};
+
+function computeWindowFromFacing(facing, exposure){
+  const halfWidth = EXPOSURE_HALF_WIDTH[exposure] || EXPOSURE_HALF_WIDTH.moderate;
+  return {min:(facing-halfWidth+360)%360, max:(facing+halfWidth)%360};
+}
+
 function dirWindowFieldHtml(id, cur){
   return `
     <div style="grid-column:1/-1;">
       <label>Swell direction window</label>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px;">
+        <div><label>Coast facing</label>${dirSelect('cfg-facing-'+id, cur.facing!=null?cur.facing:270)}</div>
+        <div><label>Exposure</label>
+          <select id="cfg-exposure-${id}">
+            ${Object.keys(EXPOSURE_LABELS).map(k=>`<option value="${k}" ${(cur.exposure||'moderate')===k?'selected':''}>${EXPOSURE_LABELS[k]}</option>`).join('')}
+          </select>
+        </div>
+        <button type="button" class="set-window-from-facing" data-spot-id="${id}">Set window from facing</button>
+      </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
         ${COMPASS_16.map(cp=>`
           <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--ink);margin-bottom:0;">
@@ -180,6 +208,8 @@ function readFieldsFromForm(id){
     waveStyle: Array.from(document.querySelectorAll('.cfg-wavestyle-'+id+':checked')).map(el=>el.value),
     dirMin: +document.getElementById('cfg-dirmin-'+id).value,
     dirMax: +document.getElementById('cfg-dirmax-'+id).value,
+    facing: +document.getElementById('cfg-facing-'+id).value,
+    exposure: document.getElementById('cfg-exposure-'+id).value,
     minH: +document.getElementById('cfg-minh-'+id).value,
     maxH: +document.getElementById('cfg-maxh-'+id).value,
     minPeriod: +document.getElementById('cfg-minperiod-'+id).value,
@@ -211,7 +241,7 @@ function renderConfigCards(){
         Include this spot in recommendations
       </label>
       ${spotFieldsGridHtml(def.id, cur)}
-      <p class="buoynote" style="margin-top:8px;">Conditions outside these swell size, period, direction or tide ranges lower this spot's score and get flagged in the ranking &mdash; the spot still shows up as an option, just marked as outside its ideal range. Check compass points to quickly set the swell direction window, or type exact degrees directly &mdash; the window can cross 0&deg;/360&deg; (e.g. NW through NE). Direction scores fall off over the 30&deg; just past either edge, then hits zero. Transmission scales an offshore/buoy swell height down (or up) to estimate what actually breaks here &mdash; leave at 1 until you've compared logged sessions against a forecast to calibrate it. Bottom type is informational plus the basis for the min/max period range: reefs and points generally want a longer, more organized groundswell to wrap cleanly, while typical beach breaks work fine on shorter/mid period &mdash; adjust the period range directly if a spot doesn't follow that rule (Ocean Beach and Supertubos are beach breaks that are tuned as exceptions).</p>
+      <p class="buoynote" style="margin-top:8px;">Conditions outside these swell size, period, direction or tide ranges lower this spot's score and get flagged in the ranking &mdash; the spot still shows up as an option, just marked as outside its ideal range. Set which way the beach faces and how exposed it is, then click "Set window from facing" for a physically reasonable starting window &mdash; a beach can only take swell from its open-ocean side. Fine-tune from there with the compass checkboxes or exact degrees; the window can cross 0&deg;/360&deg; (e.g. NW through NE). Direction scores fall off over the 30&deg; just past either edge, then hits zero. Transmission scales an offshore/buoy swell height down (or up) to estimate what actually breaks here &mdash; leave at 1 until you've compared logged sessions against a forecast to calibrate it. Bottom type is informational plus the basis for the min/max period range: reefs and points generally want a longer, more organized groundswell to wrap cleanly, while typical beach breaks work fine on shorter/mid period &mdash; adjust the period range directly if a spot doesn't follow that rule (Ocean Beach and Supertubos are beach breaks that are tuned as exceptions).</p>
       <div style="margin-top:14px;">
         <label>Description</label>
         <textarea id="cfg-blurb-${def.id}" style="min-height:56px;">${escapeHtml(cur.blurb||'')}</textarea>
@@ -270,7 +300,20 @@ function renderConfigCards(){
       if(win){
         document.getElementById('cfg-dirmin-'+sid).value = Math.round(win.min);
         document.getElementById('cfg-dirmax-'+sid).value = Math.round(win.max);
+        syncDirCheckboxesToWindow(sid, win.min, win.max);
       }
+    });
+  });
+
+  box.querySelectorAll('.set-window-from-facing').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const sid = btn.dataset.spotId;
+      const facing = +document.getElementById('cfg-facing-'+sid).value;
+      const exposure = document.getElementById('cfg-exposure-'+sid).value;
+      const win = computeWindowFromFacing(facing, exposure);
+      document.getElementById('cfg-dirmin-'+sid).value = Math.round(win.min);
+      document.getElementById('cfg-dirmax-'+sid).value = Math.round(win.max);
+      syncDirCheckboxesToWindow(sid, win.min, win.max);
     });
   });
 
