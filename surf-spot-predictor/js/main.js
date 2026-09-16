@@ -14,7 +14,7 @@ function render(){
   document.getElementById('tideFtOut').textContent=c.tideFt.toFixed(1)+' ft ('+(tideFtToCategory(c.tideFt).charAt(0).toUpperCase()+tideFtToCategory(c.tideFt).slice(1))+')';
 
   const ranked = activeSpots.filter(spot=>!spot.excluded).map(spot=>{
-    const {total:base, outOfRange} = staticScore(spot,c);
+    const {total:base, outOfRange, localH, transmission} = staticScore(spot,c);
     const profile = personalProfile(spot.id,sessionCache);
     let total = base;
     let tag = null;
@@ -23,7 +23,7 @@ function render(){
       total = base*0.6 + p*0.4;
       tag = profile.n;
     }
-    return {spot, score:round(Math.max(0,Math.min(100,total))), tag, outOfRange};
+    return {spot, score:round(Math.max(0,Math.min(100,total))), tag, outOfRange, localH, transmission};
   }).sort((a,b)=>b.score-a.score);
 
   const hiddenCount = activeSpots.filter(s=>s.excluded).length;
@@ -46,6 +46,7 @@ function render(){
         <div class="bar"><i style="width:${r.score}%;background:${barColor(r.score)}"></i></div>
         <div class="note">${r.spot.blurb}</div>
         ${r.spot.notes ? `<div class="note" style="font-style:italic;margin-top:3px;">${r.spot.notes}</div>` : ''}
+        ${r.transmission!==1 ? `<div class="note" style="margin-top:3px;">${c.swellH}ft offshore &rarr; ~${r.localH}ft here (&times;${r.transmission})</div>` : ''}
         ${r.outOfRange.length ? `<div class="note" style="color:var(--mid);margin-top:3px;">Outside ideal range &mdash; ${r.outOfRange.join(', ')}.</div>` : ''}
       </div>
       <div class="score" style="color:${barColor(r.score)}">${r.score}</div>
@@ -54,31 +55,92 @@ function render(){
   });
 }
 
+// The most recently loaded live reading, if any conditions slider hasn't
+// been touched by hand since. Attached to a session when it's logged so the
+// session list can show forecast-vs-actual for validation.
+let lastForecastSnapshot = null;
+// Readings loaded per location, so both sources can be shown side by side
+// once you've pulled each at least once for that location.
+const loadedReadings = {};
+
+function applyReadingToConditions(reading){
+  document.getElementById('swellH').value = reading.swellH;
+  document.getElementById('swellP').value = reading.swellP;
+  document.getElementById('swellDir').value = reading.swellDir;
+  if(reading.windS!=null) document.getElementById('windS').value = reading.windS;
+  if(reading.windDir!=null) document.getElementById('windDir').value = reading.windDir;
+}
+
+function renderForecastCompare(locId){
+  const box = document.getElementById('forecastCompare');
+  const readings = loadedReadings[locId];
+  if(!readings || (!readings.buoy && !readings.openMeteo)){ box.innerHTML=''; return; }
+  const rows = [];
+  if(readings.buoy){
+    const b = readings.buoy;
+    rows.push(`<div class="sess"><div><b>Live NDBC buoy</b><div class="meta">${b.time} &middot; ${b.swellH}ft @ ${b.swellP}s ${dirLabel(b.swellDir)}${b.windS!=null?`, wind ${b.windS}mph ${dirLabel(b.windDir)}`:''}</div></div></div>`);
+  }
+  if(readings.openMeteo){
+    const o = readings.openMeteo;
+    rows.push(`<div class="sess"><div><b>Open-Meteo forecast</b><div class="meta">${o.time} &middot; ${o.swellH}ft @ ${o.swellP}s ${dirLabel(o.swellDir)}${o.windS!=null?`, wind ${o.windS}mph ${dirLabel(o.windDir)}`:''}</div></div></div>`);
+  }
+  box.innerHTML = `<div class="sessions" style="margin-top:12px;">${rows.join('')}</div>`;
+}
+
 function initConditionsPanel(){
   ['swellH','swellP','swellDir','windS','windDir','tideFt','tideDir'].forEach(id=>{
-    document.getElementById(id).addEventListener('input', render);
-    document.getElementById(id).addEventListener('change', render);
+    document.getElementById(id).addEventListener('input', ()=>{ lastForecastSnapshot=null; render(); });
+    document.getElementById(id).addEventListener('change', ()=>{ lastForecastSnapshot=null; render(); });
   });
 
-  document.getElementById('loadBodega').addEventListener('click', ()=>{
-    const b = buoyReadings.bodega;
-    document.getElementById('swellH').value=b.swellH;
-    document.getElementById('swellP').value=b.swellP;
-    document.getElementById('swellDir').value=b.swellDir;
-    document.getElementById('windS').value=b.windS;
-    document.getElementById('windDir').value=b.windDir;
-    document.getElementById('buoyNote').innerHTML=`Loaded ${b.label} snapshot from ${b.time}: ${b.swellH}ft @ ${b.swellP}s from ${dirLabel(b.swellDir)}, wind ${b.windS}mph ${dirLabel(b.windDir)}. Best reference for Salmon Creek, Doran and Dillon &mdash; not a live feed, ask again later for an update.`;
-    render();
+  const locSelect = document.getElementById('forecastLocation');
+  forecastLocations.forEach(loc=>{
+    const opt = document.createElement('option');
+    opt.value = loc.id;
+    opt.textContent = `${loc.label} (near ${loc.near})`;
+    locSelect.appendChild(opt);
   });
-  document.getElementById('loadSF').addEventListener('click', ()=>{
-    const b = buoyReadings.sf;
-    document.getElementById('swellH').value=b.swellH;
-    document.getElementById('swellP').value=b.swellP;
-    document.getElementById('swellDir').value=b.swellDir;
-    document.getElementById('windS').value=b.windS;
-    document.getElementById('windDir').value=b.windDir;
-    document.getElementById('buoyNote').innerHTML=`Loaded ${b.label} snapshot from ${b.time}: ${b.swellH}ft @ ${b.swellP}s from ${dirLabel(b.swellDir)}, wind ${b.windS}mph ${dirLabel(b.windDir)}. Best reference for Stinson, Pacifica and Ocean Beach &mdash; not a live feed, ask again later for an update.`;
-    render();
+  locSelect.addEventListener('change', ()=>renderForecastCompare(locSelect.value));
+
+  document.getElementById('loadBuoy').addEventListener('click', async ()=>{
+    const btn = document.getElementById('loadBuoy');
+    const loc = forecastLocations.find(l=>l.id===locSelect.value);
+    const noteEl = document.getElementById('buoyNote');
+    btn.disabled = true;
+    try{
+      const reading = await fetchNdbcBuoy(loc.ndbcStation);
+      applyReadingToConditions(reading);
+      loadedReadings[loc.id] = Object.assign({}, loadedReadings[loc.id], {buoy: reading});
+      renderForecastCompare(loc.id);
+      lastForecastSnapshot = {source:'ndbc', station:loc.ndbcStation, location:loc.label, reading};
+      noteEl.textContent = `Loaded live NDBC buoy ${loc.ndbcStation} (${loc.label}) reading from ${reading.time}. This is straight offshore swell, not breaking wave height at the beach.`;
+      render();
+    }catch(err){
+      noteEl.textContent = `Couldn't load the ${loc.label} buoy: ${err.message}`;
+    }finally{
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('loadOpenMeteo').addEventListener('click', async ()=>{
+    const btn = document.getElementById('loadOpenMeteo');
+    const loc = forecastLocations.find(l=>l.id===locSelect.value);
+    const hourOffset = +document.getElementById('forecastHourOffset').value;
+    const noteEl = document.getElementById('buoyNote');
+    btn.disabled = true;
+    try{
+      const reading = await fetchOpenMeteoForecast(loc.lat, loc.lon, hourOffset);
+      applyReadingToConditions(reading);
+      loadedReadings[loc.id] = Object.assign({}, loadedReadings[loc.id], {openMeteo: reading});
+      renderForecastCompare(loc.id);
+      lastForecastSnapshot = {source:'open-meteo', location:loc.label, hourOffset, reading};
+      noteEl.textContent = `Loaded Open-Meteo forecast for ${loc.label} at ${reading.time}. Model-based swell, not Surfline's spot-corrected forecast.`;
+      render();
+    }catch(err){
+      noteEl.textContent = `Couldn't load the Open-Meteo forecast for ${loc.label}: ${err.message}`;
+    }finally{
+      btn.disabled = false;
+    }
   });
 }
 

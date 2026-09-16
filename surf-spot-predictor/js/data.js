@@ -91,10 +91,16 @@ const defaultSpots = [
   }
 ];
 
-const buoyReadings = {
-  bodega: {label:"Bodega Bay (46013)", swellH:6.9, swellP:8, swellDir:315, windS:19, windDir:315, time:"5:40pm PDT, Sep 14 2026"},
-  sf: {label:"San Francisco (46026)", swellH:6.2, swellP:9, swellDir:292, windS:16, windDir:315, time:"10:40pm PDT, Sep 14 2026"}
-};
+// Approximate mooring positions, used only to query the Open-Meteo grid at
+// roughly the same point as each NDBC buoy so the two sources are comparable.
+const forecastLocations = [
+  { id:"bodega", label:"Bodega Bay", ndbcStation:"46013", lat:38.246, lon:-123.301,
+    near:"Salmon Creek, Doran, Dillon" },
+  { id:"sf", label:"San Francisco", ndbcStation:"46026", lat:37.759, lon:-122.833,
+    near:"Stinson, Pacifica, Ocean Beach, Rockaway" },
+  { id:"hmb", label:"Half Moon Bay", ndbcStation:"46012", lat:37.356, lon:-122.881,
+    near:"Waddell, Cronkite, Davenport, Palomarin, Montara, San Gregorio, Tunitas" }
+];
 
 const SPOT_OFFSHORE = {
   'salmon-creek':112,'pacifica':135,'oceanbeach':90,

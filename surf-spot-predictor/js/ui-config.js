@@ -69,8 +69,9 @@ function renderConfigCards(){
         <div><label>Offshore wind direction</label>${dirSelect('cfg-winddir-'+def.id,cur.windDir)}</div>
         <div><label>Wind tolerance (&deg;)</label><input type="number" id="cfg-windtol-${def.id}" min="10" max="90" value="${cur.windTol}"></div>
         <div><label>Max wind before blown out (mph)</label><input type="number" id="cfg-maxwind-${def.id}" min="5" max="40" value="${cur.maxWind}"></div>
+        <div><label>Swell transmission (offshore &rarr; beach)</label><input type="number" id="cfg-transmission-${def.id}" min="0.2" max="1.5" step="0.05" value="${cur.transmission||1}"></div>
       </div>
-      <p class="buoynote" style="margin-top:8px;">Conditions outside these swell size, period or tide ranges lower this spot's score and get flagged in the ranking &mdash; the spot still shows up as an option, just marked as outside its ideal range.</p>
+      <p class="buoynote" style="margin-top:8px;">Conditions outside these swell size, period or tide ranges lower this spot's score and get flagged in the ranking &mdash; the spot still shows up as an option, just marked as outside its ideal range. Transmission scales an offshore/buoy swell height down (or up) to estimate what actually breaks here &mdash; leave at 1 until you've compared logged sessions against a forecast to calibrate it.</p>
       <div style="margin-top:14px;">
         <label>Description</label>
         <textarea id="cfg-blurb-${def.id}" style="min-height:56px;">${escapeHtml(cur.blurb||'')}</textarea>
@@ -117,6 +118,7 @@ function renderConfigCards(){
         windDir: +document.getElementById('cfg-winddir-'+id).value,
         windTol: +document.getElementById('cfg-windtol-'+id).value,
         maxWind: +document.getElementById('cfg-maxwind-'+id).value,
+        transmission: +document.getElementById('cfg-transmission-'+id).value,
         blurb: document.getElementById('cfg-blurb-'+id).value.trim() || defaultSpots.find(d=>d.id===id).blurb,
         notes: document.getElementById('cfg-notes-'+id).value.trim()
       };

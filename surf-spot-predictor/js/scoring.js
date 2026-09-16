@@ -9,9 +9,17 @@ function tideFtToCategory(ft){
 
 function checkRange(spot,c){
   const outOfRange=[];
+  // Swell transmission: a per-spot calibrated multiplier for how much of the
+  // offshore/buoy swell height actually shows up as breaking wave height at
+  // that beach (shoaling, refraction, local bathymetry). Defaults to 1 (no
+  // adjustment) until a spot's profile has been calibrated against logged
+  // sessions. Only the size score uses it — direction/wind/tide are about
+  // matching, not magnitude, so they stay keyed to the raw offshore reading.
+  const transmission = spot.transmission || 1;
+  const localH = Math.round(c.swellH*transmission*10)/10;
   let sizeScore;
-  if(c.swellH<spot.minH){ sizeScore=Math.max(0,100-(spot.minH-c.swellH)*20); outOfRange.push(`swell size (wants ${spot.minH}-${spot.maxH}ft)`); }
-  else if(c.swellH>spot.maxH){ sizeScore=Math.max(0,100-(c.swellH-spot.maxH)*15); outOfRange.push(`swell size (wants ${spot.minH}-${spot.maxH}ft)`); }
+  if(localH<spot.minH){ sizeScore=Math.max(0,100-(spot.minH-localH)*20); outOfRange.push(`swell size (wants ${spot.minH}-${spot.maxH}ft)`); }
+  else if(localH>spot.maxH){ sizeScore=Math.max(0,100-(localH-spot.maxH)*15); outOfRange.push(`swell size (wants ${spot.minH}-${spot.maxH}ft)`); }
   else sizeScore=100;
 
   let periodScore;
@@ -31,7 +39,7 @@ function checkRange(spot,c){
     outOfRange.push(`tide direction (prefers ${tidePref})`);
   }
 
-  return {sizeScore, periodScore, tideScore, tideDirScore, outOfRange};
+  return {sizeScore, periodScore, tideScore, tideDirScore, outOfRange, localH, transmission};
 }
 
 function staticScore(spot,c){
@@ -39,9 +47,9 @@ function staticScore(spot,c){
   const windAngle = angDiff(c.windDir,spot.windDir);
   const windDirScore = Math.max(0,100-(windAngle/spot.windTol*100));
   const windScore = Math.max(0,Math.min(windDirScore,100-Math.max(0,c.windS-spot.maxWind)*8));
-  const {sizeScore, periodScore, tideScore, tideDirScore, outOfRange} = checkRange(spot,c);
+  const {sizeScore, periodScore, tideScore, tideDirScore, outOfRange, localH, transmission} = checkRange(spot,c);
   const total = dirScore*0.22 + sizeScore*0.13 + periodScore*0.09 + windScore*0.28 + tideScore*0.18 + tideDirScore*0.10;
-  return {total, outOfRange};
+  return {total, outOfRange, localH, transmission};
 }
 
 function personalProfile(spotId,sessions){

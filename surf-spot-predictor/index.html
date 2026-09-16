@@ -65,11 +65,31 @@
         </div>
       </div>
 
-      <div class="buoybar">
-        <button id="loadBodega">Load Bodega Bay buoy (46013)</button>
-        <button id="loadSF">Load San Francisco buoy (46026)</button>
+      <div class="panel" style="margin-top:18px;background:#fff;">
+        <label>Reference location</label>
+        <select id="forecastLocation"></select>
+        <div class="grid" style="margin-top:14px;">
+          <div>
+            <button class="primary" id="loadBuoy" style="width:100%;">Load live NDBC buoy reading</button>
+          </div>
+          <div>
+            <label style="margin-bottom:4px;">Open-Meteo forecast, hours ahead</label>
+            <div style="display:flex;gap:8px;">
+              <select id="forecastHourOffset" style="flex:1;">
+                <option value="0">Now</option>
+                <option value="6">+6h</option>
+                <option value="12">+12h</option>
+                <option value="24">+24h</option>
+                <option value="48">+48h</option>
+                <option value="72">+72h</option>
+              </select>
+              <button class="primary" id="loadOpenMeteo" style="flex:1;">Load forecast</button>
+            </div>
+          </div>
+        </div>
+        <p class="buoynote" id="buoyNote">Buoys and open-ocean forecast models read swell before it reaches shore &mdash; expect actual surf to run smaller and shaped by each spot's sandbar. Load both sources at the same location to compare them.</p>
+        <div id="forecastCompare"></div>
       </div>
-      <p class="buoynote" id="buoyNote">Buoys read swell straight offshore, not breaking wave height at the beach &mdash; expect the actual surf to run smaller and shaped by each spot's sandbar.</p>
     </div>
   </section>
 
@@ -180,7 +200,7 @@
     <div class="sessions" id="sessionList"></div>
   </section>
 
-  <p class="footer-note">This is a heuristic model, not a trained forecast &mdash; it encodes published spot guidance, not verified wave-by-wave outcomes. Session data is stored locally in this browser and isn't sent anywhere.</p>
+  <p class="footer-note">This is a heuristic model, not a trained forecast &mdash; it encodes published spot guidance, not verified wave-by-wave outcomes. Session and spot-profile data is stored locally in this browser and isn't sent anywhere. Loading a live buoy or forecast reading does call NDBC's and Open-Meteo's public APIs directly from your browser.</p>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -188,6 +208,7 @@
 <script src="js/data.js"></script>
 <script src="js/imported-sessions.js"></script>
 <script src="js/scoring.js"></script>
+<script src="js/forecast-sources.js"></script>
 <script src="js/spreadsheet.js"></script>
 <script src="js/ui-config.js"></script>
 <script src="js/ui-sessions.js"></script>

@@ -1,5 +1,11 @@
 let sessionCache = [];
 
+function forecastSourceLabel(f){
+  if(f.source==='ndbc') return `NDBC ${f.station}, ${f.location}`;
+  if(f.source==='open-meteo') return `Open-Meteo${f.hourOffset?` +${f.hourOffset}h`:', now'}, ${f.location}`;
+  return f.source;
+}
+
 async function loadSessions(){
   try{
     const list = await storage.list('sessions:');
@@ -21,6 +27,7 @@ function renderSessions(){
       <div>
         <b>${spotName}</b> &mdash; ${'&#9733;'.repeat(s.rating)}${'&#9734;'.repeat(5-s.rating)}
         <div class="meta">${s.date} &middot; ${s.swellH}ft ${dirLabel(s.swellDir)} swell, ${s.windS}mph ${dirLabel(s.windDir)} wind, ${s.tide} tide${s.notes?' &middot; '+s.notes:''}</div>
+        ${s.forecast ? `<div class="meta" style="margin-top:3px;">Forecast at log time (${forecastSourceLabel(s.forecast)}): ${s.forecast.reading.swellH}ft @ ${s.forecast.reading.swellP}s ${dirLabel(s.forecast.reading.swellDir)}${s.forecast.reading.windS!=null?`, wind ${s.forecast.reading.windS}mph ${dirLabel(s.forecast.reading.windDir)}`:''} &mdash; vs. logged actual above</div>` : ''}
       </div>
       <button class="delbtn" data-id="${s.id}">Remove</button>
     `;
@@ -68,11 +75,13 @@ function initSessionLogForm(){
       rating: selectedRating,
       notes: document.getElementById('logNotes').value.trim()
     };
+    if(lastForecastSnapshot) session.forecast = lastForecastSnapshot;
     try{
       await storage.set('sessions:'+id, JSON.stringify(session));
-      msg.style.color='var(--good)'; msg.textContent='Session logged.';
+      msg.style.color='var(--good)'; msg.textContent='Session logged.'+(session.forecast?' Forecast snapshot attached for comparison.':'');
       document.getElementById('logNotes').value='';
       selectedRating=0;
+      lastForecastSnapshot=null;
       document.querySelectorAll('#stars .star').forEach(s2=>s2.classList.remove('on'));
       await loadSessions(); renderSessions(); render();
     }catch(e){
