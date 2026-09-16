@@ -145,6 +145,7 @@ function initConditionsPanel(){
 }
 
 (async ()=>{
+  await loadCustomSpots();
   await loadOverrides();
   await loadSessions();
   renderConfigCards();
@@ -152,6 +153,7 @@ function initConditionsPanel(){
   initConditionsPanel();
   initSessionLogForm();
   initImportedSessionsButton();
+  initAddCustomSpotButton();
   initSpreadsheetImport(async ()=>{ await loadSessions(); renderSessions(); render(); });
   render();
 })();

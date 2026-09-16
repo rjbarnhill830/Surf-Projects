@@ -41,12 +41,21 @@ function renderSessions(){
   });
 }
 
-function initSessionLogForm(){
-  defaultSpots.forEach(s=>{
+function refreshLogSpotOptions(){
+  const sel = document.getElementById('logSpot');
+  const prevValue = sel.value;
+  const all = defaultSpots.concat(customSpots);
+  sel.innerHTML = '';
+  all.forEach(s=>{
     const opt=document.createElement('option');
     opt.value=s.id; opt.textContent=s.name;
-    document.getElementById('logSpot').appendChild(opt);
+    sel.appendChild(opt);
   });
+  if(all.some(s=>s.id===prevValue)) sel.value = prevValue;
+}
+
+function initSessionLogForm(){
+  refreshLogSpotOptions();
   document.getElementById('logDate').value = new Date().toISOString().slice(0,10);
 
   let selectedRating = 0;
