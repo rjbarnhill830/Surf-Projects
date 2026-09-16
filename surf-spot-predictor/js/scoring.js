@@ -1,6 +1,23 @@
 function angDiff(a,b){let d=Math.abs(a-b)%360;return d>180?360-d:d;}
 function round(n){return Math.round(n);}
 
+// A spot's swell window is a continuous arc [min,max] that may cross the
+// 0/360 boundary (e.g. a window spanning NNW through NNE wraps through
+// north). angleInWindow/angleDistanceToWindow both account for that.
+function angleInWindow(angle,min,max){
+  const a=((angle%360)+360)%360, mn=((min%360)+360)%360, mx=((max%360)+360)%360;
+  if(mn<=mx) return a>=mn && a<=mx;
+  return a>=mn || a<=mx;
+}
+function angleDistanceToWindow(angle,min,max){
+  if(angleInWindow(angle,min,max)) return 0;
+  return Math.min(angDiff(angle,min), angDiff(angle,max));
+}
+// Degrees of grace past a window's edge before direction score hits 0 —
+// the window itself is where the swell "clean" range already lives, so this
+// is just a soft landing, not a per-spot tunable like the old tolerance was.
+const DIR_FALLOFF_DEGREES = 30;
+
 function tideFtToCategory(ft){
   if(ft<1.5) return 'low';
   if(ft>4) return 'high';
@@ -59,7 +76,8 @@ function checkRange(spot,c){
 }
 
 function staticScore(spot,c){
-  const dirScore = Math.max(0,100-(angDiff(c.swellDir,spot.dir)/spot.dirTol*100));
+  const dirDist = angleDistanceToWindow(c.swellDir, spot.dirMin, spot.dirMax);
+  const dirScore = Math.max(0,100-(dirDist/DIR_FALLOFF_DEGREES*100));
   const windAngle = angDiff(c.windDir,spot.windDir);
   const windDirScore = Math.max(0,100-(windAngle/spot.windTol*100));
   const windScore = Math.max(0,Math.min(windDirScore,100-Math.max(0,c.windS-spot.maxWind)*8));
