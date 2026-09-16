@@ -60,8 +60,9 @@ function render(){
 // session list can show forecast-vs-actual for validation.
 let lastForecastSnapshot = null;
 // Readings loaded per location, so both sources can be shown side by side
-// once you've pulled each at least once for that location.
-const loadedReadings = {};
+// once you've pulled each at least once for that location. Cleared on zone
+// switch by switchZone() in js/zones.js.
+let loadedReadings = {};
 
 function applyReadingToConditions(reading){
   document.getElementById('swellH').value = reading.swellH;
@@ -87,6 +88,28 @@ function renderForecastCompare(locId){
   box.innerHTML = `<div class="sessions" style="margin-top:12px;">${rows.join('')}</div>`;
 }
 
+function refreshForecastLocationOptions(){
+  const locSelect = document.getElementById('forecastLocation');
+  locSelect.innerHTML = '';
+  forecastLocations.forEach(loc=>{
+    const opt = document.createElement('option');
+    opt.value = loc.id;
+    opt.textContent = `${loc.label} (near ${loc.near})`;
+    locSelect.appendChild(opt);
+  });
+  renderForecastCompare(locSelect.value);
+  updateBuoyButtonAvailability();
+}
+
+function updateBuoyButtonAvailability(){
+  const locSelect = document.getElementById('forecastLocation');
+  const loc = forecastLocations.find(l=>l.id===locSelect.value);
+  const btn = document.getElementById('loadBuoy');
+  const hasBuoy = !!(loc && loc.ndbcStation);
+  btn.disabled = !hasBuoy;
+  btn.title = hasBuoy ? '' : `No live buoy source configured for ${loc?loc.label:'this location'} yet — use the Open-Meteo forecast instead.`;
+}
+
 function initConditionsPanel(){
   ['swellH','swellP','swellDir','windS','windDir','tideFt','tideDir'].forEach(id=>{
     document.getElementById(id).addEventListener('input', ()=>{ lastForecastSnapshot=null; render(); });
@@ -94,18 +117,20 @@ function initConditionsPanel(){
   });
 
   const locSelect = document.getElementById('forecastLocation');
-  forecastLocations.forEach(loc=>{
-    const opt = document.createElement('option');
-    opt.value = loc.id;
-    opt.textContent = `${loc.label} (near ${loc.near})`;
-    locSelect.appendChild(opt);
+  refreshForecastLocationOptions();
+  locSelect.addEventListener('change', ()=>{
+    renderForecastCompare(locSelect.value);
+    updateBuoyButtonAvailability();
   });
-  locSelect.addEventListener('change', ()=>renderForecastCompare(locSelect.value));
 
   document.getElementById('loadBuoy').addEventListener('click', async ()=>{
     const btn = document.getElementById('loadBuoy');
     const loc = forecastLocations.find(l=>l.id===locSelect.value);
     const noteEl = document.getElementById('buoyNote');
+    if(!loc || !loc.ndbcStation){
+      noteEl.textContent = `No live buoy source configured for ${loc?loc.label:'this location'} yet — use the Open-Meteo forecast instead.`;
+      return;
+    }
     btn.disabled = true;
     try{
       const reading = await fetchNdbcBuoy(loc.ndbcStation);
@@ -145,6 +170,7 @@ function initConditionsPanel(){
 }
 
 (async ()=>{
+  await migrateLegacyNorcalStorage();
   await loadCustomSpots();
   await loadOverrides();
   await loadSessions();
@@ -154,6 +180,7 @@ function initConditionsPanel(){
   initSessionLogForm();
   initImportedSessionsButton();
   initAddCustomSpotButton();
+  initZonePicker();
   initSpreadsheetImport(async ()=>{ await loadSessions(); renderSessions(); render(); });
   render();
 })();

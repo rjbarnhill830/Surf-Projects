@@ -3,14 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NorCal surf spot predictor</title>
+<title>Surf spot predictor</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <div class="wrap">
 
-  <h1>NorCal surf spot predictor</h1>
-  <p class="sub">Rule-based model for six Sonoma / Marin / SF breaks. Spot profiles are built from published surf-forecast guides (Surfline and others); buoy snapshots come from NOAA NDBC. Log real sessions below and the model nudges its scoring toward what's actually worked for you.</p>
+  <h1>Surf spot predictor</h1>
+  <p class="sub">Rule-based spot-matching model. Spot profiles are built from published surf-forecast guides; buoy and forecast readings come from live public data. Log real sessions below and the model nudges its scoring toward what's actually worked for you.</p>
+
+  <section>
+    <h2>Search an area</h2>
+    <div class="panel">
+      <label>Region</label>
+      <select id="zoneSelect"></select>
+      <p class="buoynote" id="zoneNote"></p>
+    </div>
+  </section>
 
   <section>
     <h2>Current conditions</h2>
@@ -106,7 +115,7 @@
     <div id="configCards" style="display:flex;flex-direction:column;gap:14px;"></div>
   </section>
 
-  <section>
+  <section id="spreadsheetSection">
     <h2>Load from your spreadsheet</h2>
     <div class="panel">
       <p class="sub" style="margin-bottom:14px;">This tool can't reach files on your computer on its own &mdash; browsers don't allow that. Instead, click below and pick your spreadsheet file directly; it's read right here in your browser and never leaves your machine. Do this again any time you've added new rows to the "Surf Tracker" tab.</p>
@@ -117,7 +126,7 @@
     </div>
   </section>
 
-  <section>
+  <section id="importSection">
     <h2>Import your session log</h2>
     <div class="panel" id="importPanel">
       <p class="sub" style="margin-bottom:14px;">From your spreadsheet: <b id="importSummary">98 sessions</b> across 15 spots. Moraga is now folded into Ocean Beach SF (it's one of the numbered avenues there), and Montara, San Gregorio, and Tunitas Creek were added as real spot profiles from published guides &mdash; though the single logged visit to each didn't record swell/wind, so no sessions were importable for those three yet. Ratings are inferred from the tone of your notes, not real ratings &mdash; review after importing and delete/re-log anything that reads wrong.</p>
@@ -207,6 +216,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/data.js"></script>
+<script src="js/zones.js"></script>
 <script src="js/imported-sessions.js"></script>
 <script src="js/scoring.js"></script>
 <script src="js/forecast-sources.js"></script>

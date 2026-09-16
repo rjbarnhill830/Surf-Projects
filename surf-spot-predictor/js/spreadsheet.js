@@ -176,9 +176,9 @@ function initSpreadsheetImport(onImported){
         let added=0, dup=0;
         for(const s of parsedFromFile){
           try{
-            const existing = await storage.get('sessions:'+s.id).catch(()=>null);
+            const existing = await storage.get(zoneKey('sessions:'+s.id)).catch(()=>null);
             if(existing){ dup++; continue; }
-            await storage.set('sessions:'+s.id, JSON.stringify(s));
+            await storage.set(zoneKey('sessions:'+s.id), JSON.stringify(s));
             added++;
           }catch(err){ /* skip */ }
         }
