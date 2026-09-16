@@ -14,16 +14,7 @@ function render(){
   document.getElementById('tideFtOut').textContent=c.tideFt.toFixed(1)+' ft ('+(tideFtToCategory(c.tideFt).charAt(0).toUpperCase()+tideFtToCategory(c.tideFt).slice(1))+')';
 
   const ranked = activeSpots.filter(spot=>!spot.excluded).map(spot=>{
-    const {total:base, outOfRange, localH, transmission} = staticScore(spot,c);
-    const profile = personalProfile(spot.id,sessionCache);
-    let total = base;
-    let tag = null;
-    if(profile){
-      const p = personalScore(profile,c);
-      total = base*0.6 + p*0.4;
-      tag = profile.n;
-    }
-    return {spot, score:round(Math.max(0,Math.min(100,total))), tag, outOfRange, localH, transmission};
+    return Object.assign({spot}, scoreSpot(spot, c, sessionCache));
   }).sort((a,b)=>b.score-a.score);
 
   const hiddenCount = activeSpots.filter(s=>s.excluded).length;
@@ -180,6 +171,7 @@ function initConditionsPanel(){
   initSessionLogForm();
   initImportedSessionsButton();
   initAddCustomSpotButton();
+  initForecastSection();
   initZonePicker();
   initSpreadsheetImport(async ()=>{ await loadSessions(); renderSessions(); render(); });
   render();

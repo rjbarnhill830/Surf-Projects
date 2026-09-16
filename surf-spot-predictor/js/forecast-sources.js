@@ -90,3 +90,103 @@ async function fetchOpenMeteoForecast(lat, lon, hourOffset){
     time: times[targetIdx]
   };
 }
+
+// NOAA CO-OPS hourly tide predictions (feet, MLLW datum) — free, public, no
+// API key, US stations only. Returns [{time, ft, direction}], direction
+// derived by comparing each point to its neighbor since CO-OPS predictions
+// don't include it directly.
+async function fetchTidePredictions(stationId, days){
+  const fmt = d => `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  const begin = new Date();
+  const end = new Date(Date.now() + days*86400000);
+  const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=surf_spot_predictor&begin_date=${fmt(begin)}&end_date=${fmt(end)}&datum=MLLW&station=${stationId}&time_zone=lst_ldt&units=english&interval=h&format=json`;
+
+  let res;
+  try{
+    res = await fetch(url);
+  }catch(e){
+    throw new Error(`Could not reach NOAA tide predictions (${e.message}).`);
+  }
+  if(!res.ok) throw new Error(`NOAA tide station ${stationId} request failed (HTTP ${res.status}).`);
+  const data = await res.json();
+  if(data.error) throw new Error(`NOAA tide station ${stationId}: ${data.error.message || 'unknown error'}.`);
+  const preds = data.predictions;
+  if(!preds || preds.length===0) throw new Error(`NOAA tide station ${stationId} returned no predictions.`);
+
+  const points = preds.map(p=>({ time: p.t.replace(' ','T'), ft: parseFloat(p.v) }));
+  points.forEach((pt,i)=>{
+    if(i < points.length-1){
+      pt.direction = points[i+1].ft < pt.ft ? 'outgoing' : 'incoming';
+    }else if(i > 0){
+      pt.direction = points[i-1].ft > pt.ft ? 'outgoing' : 'incoming';
+    }else{
+      pt.direction = 'incoming';
+    }
+  });
+  return points;
+}
+
+// Full hourly swell + wind + (where available) tide timeline for a
+// reference location, merged by timestamp into the same shape scoreSpot()
+// expects. Missing tide (no station for this zone, or the NOAA fetch
+// failed) yields tideFt/tideDir: null on every point rather than breaking
+// the merge — checkRange() in scoring.js treats null tide as neutral, not
+// as an actual low reading.
+async function fetchForecastTimeline(location, days){
+  const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${location.lat}&longitude=${location.lon}&hourly=swell_wave_height,swell_wave_period,swell_wave_direction&timezone=auto&forecast_days=${days}`;
+  const windUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&hourly=windspeed_10m,winddirection_10m&wind_speed_unit=mph&timezone=auto&forecast_days=${days}`;
+
+  let marineRes, windRes;
+  try{
+    [marineRes, windRes] = await Promise.all([fetch(marineUrl), fetch(windUrl)]);
+  }catch(e){
+    throw new Error(`Could not reach Open-Meteo (${e.message}).`);
+  }
+  if(!marineRes.ok) throw new Error(`Open-Meteo marine request failed (HTTP ${marineRes.status}).`);
+  if(!windRes.ok) throw new Error(`Open-Meteo wind request failed (HTTP ${windRes.status}).`);
+  const marine = await marineRes.json();
+  const wind = await windRes.json();
+  const times = marine?.hourly?.time;
+  if(!times || times.length===0) throw new Error('Open-Meteo returned no forecast data for that location.');
+
+  const windByTime = {};
+  (wind?.hourly?.time || []).forEach((t,i)=>{
+    windByTime[t] = { s: wind.hourly.windspeed_10m[i], d: wind.hourly.winddirection_10m[i] };
+  });
+
+  let tideByTime = {};
+  let tideError = null;
+  if(location.tideStation){
+    try{
+      const tidePoints = await fetchTidePredictions(location.tideStation, days);
+      tidePoints.forEach(p=>{ tideByTime[p.time] = p; });
+    }catch(e){
+      tideError = e.message;
+    }
+  }
+
+  const timeline = times.map((t,i)=>{
+    const hM = marine.hourly.swell_wave_height[i];
+    const p = marine.hourly.swell_wave_period[i];
+    const d = marine.hourly.swell_wave_direction[i];
+    if(hM==null || p==null || d==null) return null;
+    const w = windByTime[t];
+    const tide = tideByTime[t];
+    return {
+      time: t,
+      swellH: Math.round(hM*M_TO_FT*10)/10,
+      swellP: Math.round(p),
+      swellDir: Math.round(d),
+      windS: w && w.s!=null ? Math.round(w.s) : null,
+      windDir: w && w.d!=null ? Math.round(w.d) : null,
+      tideFt: tide ? Math.round(tide.ft*10)/10 : null,
+      tideDir: tide ? tide.direction : null
+    };
+  }).filter(Boolean);
+
+  return {
+    timeline,
+    tideAvailable: !!location.tideStation && !tideError,
+    tideError
+  };
+}

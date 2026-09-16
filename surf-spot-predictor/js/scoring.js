@@ -27,14 +27,19 @@ function checkRange(spot,c){
   else if(c.swellP>spot.maxPeriod){ periodScore=Math.max(0,100-(c.swellP-spot.maxPeriod)*8); outOfRange.push(`period (wants ${spot.minPeriod}-${spot.maxPeriod}s)`); }
   else periodScore=100;
 
+  // A null tideFt/tideDir means tide data wasn't available for this reading
+  // (e.g. no NOAA station for this zone) rather than an actual low/falling
+  // tide — score it neutrally instead of coercing null to 0.
+  const tideKnown = c.tideFt!=null;
   let tideScore;
-  if(c.tideFt<spot.tideMin){ tideScore=Math.max(0,100-(spot.tideMin-c.tideFt)*22); outOfRange.push(`tide (wants ${spot.tideMin}-${spot.tideMax}ft)`); }
+  if(!tideKnown) tideScore=100;
+  else if(c.tideFt<spot.tideMin){ tideScore=Math.max(0,100-(spot.tideMin-c.tideFt)*22); outOfRange.push(`tide (wants ${spot.tideMin}-${spot.tideMax}ft)`); }
   else if(c.tideFt>spot.tideMax){ tideScore=Math.max(0,100-(c.tideFt-spot.tideMax)*22); outOfRange.push(`tide (wants ${spot.tideMin}-${spot.tideMax}ft)`); }
   else tideScore=100;
 
   const tidePref = spot.tideDirection || 'either';
   let tideDirScore = 100;
-  if(tidePref!=='either' && c.tideDir!==tidePref){
+  if(tideKnown && c.tideDir!=null && tidePref!=='either' && c.tideDir!==tidePref){
     tideDirScore = 65;
     outOfRange.push(`tide direction (prefers ${tidePref})`);
   }
@@ -75,6 +80,23 @@ function personalScore(profile,c){
   const windSpeedScore=Math.max(0,100-Math.abs(c.windS-profile.windS)*4);
   const tideScore=tideFtToCategory(c.tideFt)===profile.tide?100:50;
   return dirScore*0.3+sizeScore*0.2+windDirScore*0.25+windSpeedScore*0.1+tideScore*0.15;
+}
+
+// Blends the published/customized spot profile score with whatever's been
+// learned from logged sessions at that spot. Shared by the live "current
+// conditions" ranking and the week-ahead forecast timeline so both always
+// agree on how a spot is scored for the same conditions.
+function scoreSpot(spot, conditions, sessions){
+  const {total:base, outOfRange, localH, transmission} = staticScore(spot, conditions);
+  const profile = personalProfile(spot.id, sessions);
+  let total = base;
+  let tag = null;
+  if(profile){
+    const p = personalScore(profile, conditions);
+    total = base*0.6 + p*0.4;
+    tag = profile.n;
+  }
+  return {score: round(Math.max(0, Math.min(100, total))), tag, outOfRange, localH, transmission};
 }
 
 function barColor(s){ return s>=75?"var(--good)":s>=50?"var(--mid)":"var(--low)"; }
