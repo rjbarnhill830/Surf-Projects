@@ -46,12 +46,21 @@ function blankCustomSpot(){
     windDir:90, windTol:40, maxWind:15,
     tideMin:-2, tideMax:7, minPeriod:6, maxPeriod:22,
     tideDirection:'either', transmission:1, bottomType:'unknown',
+    skillLevel:'intermediate', waveStyle:[],
     blurb:'', notes:''
   };
 }
 
 const BOTTOM_TYPE_LABELS = {
   beach:'Beach break', reef:'Reef', point:'Point', combo:'Combo', unknown:'Unknown'
+};
+
+const SKILL_LEVEL_LABELS = {
+  beginner:'Beginner', intermediate:'Intermediate', advanced:'Advanced'
+};
+
+const WAVE_STYLE_LABELS = {
+  playful:'Playful', powerful:'Powerful', hollow:'Hollow', peaky:'Peaky'
 };
 
 const dirOptions = [
@@ -76,6 +85,11 @@ function spotFieldsGridHtml(id, cur){
           ${Object.keys(BOTTOM_TYPE_LABELS).map(k=>`<option value="${k}" ${(cur.bottomType||'unknown')===k?'selected':''}>${BOTTOM_TYPE_LABELS[k]}</option>`).join('')}
         </select>
       </div>
+      <div><label>Skill level required</label>
+        <select id="cfg-skilllevel-${id}">
+          ${Object.keys(SKILL_LEVEL_LABELS).map(k=>`<option value="${k}" ${(cur.skillLevel||'intermediate')===k?'selected':''}>${SKILL_LEVEL_LABELS[k]}</option>`).join('')}
+        </select>
+      </div>
       <div><label>Ideal swell direction</label>${dirSelect('cfg-dir-'+id,cur.dir)}</div>
       <div><label>Direction tolerance (&deg;)</label><input type="number" id="cfg-dirtol-${id}" min="10" max="90" value="${cur.dirTol}"></div>
       <div><label>Min swell height (ft)</label><input type="number" id="cfg-minh-${id}" min="0" max="15" step="0.5" value="${cur.minH}"></div>
@@ -96,12 +110,25 @@ function spotFieldsGridHtml(id, cur){
       <div><label>Max wind before blown out (mph)</label><input type="number" id="cfg-maxwind-${id}" min="5" max="40" value="${cur.maxWind}"></div>
       <div><label>Swell transmission (offshore &rarr; beach)</label><input type="number" id="cfg-transmission-${id}" min="0.2" max="1.5" step="0.05" value="${cur.transmission||1}"></div>
     </div>
+    <div style="margin-top:12px;">
+      <label>Wave style</label>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;">
+        ${Object.keys(WAVE_STYLE_LABELS).map(k=>`
+          <label style="display:flex;align-items:center;gap:5px;font-size:13.5px;color:var(--ink);margin-bottom:0;">
+            <input type="checkbox" class="cfg-wavestyle-${id}" value="${k}" style="width:auto;" ${(cur.waveStyle||[]).includes(k)?'checked':''}>
+            ${WAVE_STYLE_LABELS[k]}
+          </label>
+        `).join('')}
+      </div>
+    </div>
   `;
 }
 
 function readFieldsFromForm(id){
   return {
     bottomType: document.getElementById('cfg-bottomtype-'+id).value,
+    skillLevel: document.getElementById('cfg-skilllevel-'+id).value,
+    waveStyle: Array.from(document.querySelectorAll('.cfg-wavestyle-'+id+':checked')).map(el=>el.value),
     dir: +document.getElementById('cfg-dir-'+id).value,
     dirTol: +document.getElementById('cfg-dirtol-'+id).value,
     minH: +document.getElementById('cfg-minh-'+id).value,

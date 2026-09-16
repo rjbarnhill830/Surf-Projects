@@ -44,7 +44,18 @@ function checkRange(spot,c){
     outOfRange.push(`tide direction (prefers ${tidePref})`);
   }
 
-  return {sizeScore, periodScore, tideScore, tideDirScore, outOfRange, localH, transmission};
+  // Wave style is a soft taste preference, not a hazard, so a mismatch never
+  // drops below 40 — it nudges the ranking rather than punishing it. No
+  // preference selected (the default) is fully neutral.
+  const wantedStyles = c.waveStyles || [];
+  let styleScore = 100;
+  if(wantedStyles.length>0){
+    const spotStyles = spot.waveStyle || [];
+    const matches = wantedStyles.filter(s=>spotStyles.includes(s)).length;
+    styleScore = 40 + 60*(matches/wantedStyles.length);
+  }
+
+  return {sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, transmission};
 }
 
 function staticScore(spot,c){
@@ -52,8 +63,18 @@ function staticScore(spot,c){
   const windAngle = angDiff(c.windDir,spot.windDir);
   const windDirScore = Math.max(0,100-(windAngle/spot.windTol*100));
   const windScore = Math.max(0,Math.min(windDirScore,100-Math.max(0,c.windS-spot.maxWind)*8));
-  const {sizeScore, periodScore, tideScore, tideDirScore, outOfRange, localH, transmission} = checkRange(spot,c);
-  const total = dirScore*0.22 + sizeScore*0.13 + periodScore*0.09 + windScore*0.28 + tideScore*0.18 + tideDirScore*0.10;
+  const {sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, transmission} = checkRange(spot,c);
+  let total;
+  if(c.waveStyles && c.waveStyles.length>0){
+    // Wave-style preference gets 0.15, with the original six components
+    // scaled down proportionally (×0.85) to make room for it.
+    total = (dirScore*0.22 + sizeScore*0.13 + periodScore*0.09 + windScore*0.28 + tideScore*0.18 + tideDirScore*0.10)*0.85
+      + styleScore*0.15;
+  }else{
+    // No style preference set: identical to the pre-style formula, not an
+    // approximation of it — nothing changes until you opt in.
+    total = dirScore*0.22 + sizeScore*0.13 + periodScore*0.09 + windScore*0.28 + tideScore*0.18 + tideDirScore*0.10;
+  }
   return {total, outOfRange, localH, transmission};
 }
 
@@ -82,12 +103,15 @@ function personalScore(profile,c){
   return dirScore*0.3+sizeScore*0.2+windDirScore*0.25+windSpeedScore*0.1+tideScore*0.15;
 }
 
+const SKILL_ORDER = {beginner:0, intermediate:1, advanced:2};
+
 // Blends the published/customized spot profile score with whatever's been
-// learned from logged sessions at that spot. Shared by the live "current
-// conditions" ranking and the week-ahead forecast timeline so both always
-// agree on how a spot is scored for the same conditions.
-function scoreSpot(spot, conditions, sessions){
-  const {total:base, outOfRange, localH, transmission} = staticScore(spot, conditions);
+// learned from logged sessions at that spot, then applies a skill-level
+// safety gate. Shared by the live "current conditions" ranking and the
+// week-ahead forecast timeline so both always agree on how a spot is scored
+// for the same conditions and the same surfer.
+function scoreSpot(spot, conditions, sessions, userSkill){
+  let {total:base, outOfRange, localH, transmission} = staticScore(spot, conditions);
   const profile = personalProfile(spot.id, sessions);
   let total = base;
   let tag = null;
@@ -96,10 +120,24 @@ function scoreSpot(spot, conditions, sessions){
     total = base*0.6 + p*0.4;
     tag = profile.n;
   }
+
+  // Skill is a safety gate, not a taste preference — a mismatch multiplies
+  // the whole score down rather than just nudging one weighted term, since
+  // "perfect conditions at a spot you can't handle" shouldn't blend into a
+  // deceptively decent-looking number. Defaults to 'advanced' (no gate)
+  // until the user actually sets their own level.
+  const spotSkill = SKILL_ORDER[spot.skillLevel];
+  const gap = spotSkill!=null ? spotSkill - SKILL_ORDER[userSkill || 'advanced'] : 0;
+  let skillMultiplier = 1;
+  if(gap===1){ skillMultiplier = 0.6; outOfRange = outOfRange.concat(`requires ${spot.skillLevel} skill (you're set to ${userSkill})`); }
+  else if(gap>=2){ skillMultiplier = 0.25; outOfRange = outOfRange.concat(`requires ${spot.skillLevel} skill (you're set to ${userSkill})`); }
+  total *= skillMultiplier;
+
   return {score: round(Math.max(0, Math.min(100, total))), tag, outOfRange, localH, transmission};
 }
 
 function barColor(s){ return s>=75?"var(--good)":s>=50?"var(--mid)":"var(--low)"; }
+function skillBadgeColor(level){ return level==='beginner'?"var(--good)":level==='advanced'?"var(--low)":"var(--mid)"; }
 
 const COMPASS_NAMES=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
 function dirLabel(deg){

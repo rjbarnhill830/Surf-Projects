@@ -55,8 +55,9 @@ function renderForecastResults(timeline, tideAvailable, tideError){
   // coarser grid below.
   const bestPerSpot = {};
   timeline.forEach(pt=>{
+    const conditions = Object.assign({waveStyles: userWaveStyles}, pt);
     spotsToScore.forEach(spot=>{
-      const r = scoreSpot(spot, pt, sessionCache);
+      const r = scoreSpot(spot, conditions, sessionCache, userSkillLevel);
       if(!bestPerSpot[spot.id] || r.score > bestPerSpot[spot.id].score){
         bestPerSpot[spot.id] = {spot, time:pt.time, score:r.score};
       }
@@ -73,7 +74,7 @@ function renderForecastResults(timeline, tideAvailable, tideError){
     div.className = 'card';
     div.innerHTML = `
       <div class="body">
-        <div class="name">${pick.spot.name}${pick.spot.bottomType&&pick.spot.bottomType!=='unknown'?`<span class="badge" style="background:var(--muted);">${BOTTOM_TYPE_LABELS[pick.spot.bottomType]}</span>`:''}</div>
+        <div class="name">${pick.spot.name}${pick.spot.bottomType&&pick.spot.bottomType!=='unknown'?`<span class="badge" style="background:var(--muted);">${BOTTOM_TYPE_LABELS[pick.spot.bottomType]}</span>`:''}${pick.spot.skillLevel?`<span class="badge" style="background:${skillBadgeColor(pick.spot.skillLevel)};">${SKILL_LEVEL_LABELS[pick.spot.skillLevel]}</span>`:''}</div>
         <div class="bar"><i style="width:${pick.score}%;background:${barColor(pick.score)}"></i></div>
         <div class="note">${formatForecastTime(pick.time)}</div>
       </div>
@@ -114,7 +115,7 @@ function renderForecastResults(timeline, tideAvailable, tideError){
     <tbody>
       ${orderedSpots.map(spot=>{
         const cells = sampledPoints.map(p=>{
-          const r = scoreSpot(spot, p, sessionCache);
+          const r = scoreSpot(spot, Object.assign({waveStyles: userWaveStyles}, p), sessionCache, userSkillLevel);
           return `<td style="background:${barColor(r.score)};color:#fff;">${r.score}</td>`;
         }).join('');
         return `<tr><td class="sticky-col">${spot.name}</td>${cells}</tr>`;

@@ -22,6 +22,40 @@
   </section>
 
   <section>
+    <h2>Your surfing</h2>
+    <div class="panel">
+      <div class="grid">
+        <div>
+          <label>Skill level</label>
+          <select id="userSkillLevel">
+            <option value="beginner">Beginner</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="advanced" selected>Advanced</option>
+          </select>
+        </div>
+        <div>
+          <label>Wave style you're after (optional)</label>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;">
+            <label style="display:flex;align-items:center;gap:5px;font-size:13.5px;margin-bottom:0;">
+              <input type="checkbox" class="user-wavestyle" value="playful" style="width:auto;"> Playful
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13.5px;margin-bottom:0;">
+              <input type="checkbox" class="user-wavestyle" value="powerful" style="width:auto;"> Powerful
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13.5px;margin-bottom:0;">
+              <input type="checkbox" class="user-wavestyle" value="hollow" style="width:auto;"> Hollow
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13.5px;margin-bottom:0;">
+              <input type="checkbox" class="user-wavestyle" value="peaky" style="width:auto;"> Peaky
+            </label>
+          </div>
+        </div>
+      </div>
+      <p class="buoynote" style="margin-top:10px;">Skill level filters out spots that need more than you've got &mdash; set it honestly, it's a safety check, not just a label. Wave style is a soft nudge toward what you're in the mood for; leave all unchecked for no preference.</p>
+    </div>
+  </section>
+
+  <section>
     <h2>Current conditions</h2>
     <div class="panel">
       <div class="grid">
@@ -249,6 +283,7 @@
 <script src="js/spreadsheet.js"></script>
 <script src="js/ui-config.js"></script>
 <script src="js/ui-sessions.js"></script>
+<script src="js/ui-preferences.js"></script>
 <script src="js/ui-forecast.js"></script>
 <script src="js/main.js"></script>
 </body>

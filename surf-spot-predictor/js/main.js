@@ -6,7 +6,8 @@ function render(){
     windS:+document.getElementById('windS').value,
     windDir:+document.getElementById('windDir').value,
     tideFt:+document.getElementById('tideFt').value,
-    tideDir:document.getElementById('tideDir').value
+    tideDir:document.getElementById('tideDir').value,
+    waveStyles: userWaveStyles
   };
   document.getElementById('swellHOut').textContent=c.swellH+' ft';
   document.getElementById('swellPOut').textContent=c.swellP+' s';
@@ -14,7 +15,7 @@ function render(){
   document.getElementById('tideFtOut').textContent=c.tideFt.toFixed(1)+' ft ('+(tideFtToCategory(c.tideFt).charAt(0).toUpperCase()+tideFtToCategory(c.tideFt).slice(1))+')';
 
   const ranked = activeSpots.filter(spot=>!spot.excluded).map(spot=>{
-    return Object.assign({spot}, scoreSpot(spot, c, sessionCache));
+    return Object.assign({spot}, scoreSpot(spot, c, sessionCache, userSkillLevel));
   }).sort((a,b)=>b.score-a.score);
 
   const hiddenCount = activeSpots.filter(s=>s.excluded).length;
@@ -33,7 +34,7 @@ function render(){
     div.innerHTML=`
       <div class="rank">${i+1}</div>
       <div class="body">
-        <div class="name">${r.spot.name}${r.spot.bottomType&&r.spot.bottomType!=='unknown'?`<span class="badge" style="background:var(--muted);">${BOTTOM_TYPE_LABELS[r.spot.bottomType]}</span>`:''}${r.tag?`<span class="badge">${r.tag} rated sessions</span>`:''}</div>
+        <div class="name">${r.spot.name}${r.spot.bottomType&&r.spot.bottomType!=='unknown'?`<span class="badge" style="background:var(--muted);">${BOTTOM_TYPE_LABELS[r.spot.bottomType]}</span>`:''}${r.spot.skillLevel?`<span class="badge" style="background:${skillBadgeColor(r.spot.skillLevel)};">${SKILL_LEVEL_LABELS[r.spot.skillLevel]}</span>`:''}${r.tag?`<span class="badge">${r.tag} rated sessions</span>`:''}</div>
         <div class="bar"><i style="width:${r.score}%;background:${barColor(r.score)}"></i></div>
         <div class="note">${r.spot.blurb}</div>
         ${r.spot.notes ? `<div class="note" style="font-style:italic;margin-top:3px;">${r.spot.notes}</div>` : ''}
@@ -162,6 +163,7 @@ function initConditionsPanel(){
 
 (async ()=>{
   await migrateLegacyNorcalStorage();
+  await loadUserSkillLevel();
   await loadCustomSpots();
   await loadOverrides();
   await loadSessions();
@@ -172,6 +174,7 @@ function initConditionsPanel(){
   initImportedSessionsButton();
   initAddCustomSpotButton();
   initForecastSection();
+  initPreferencesPanel();
   initZonePicker();
   initSpreadsheetImport(async ()=>{ await loadSessions(); renderSessions(); render(); });
   render();
