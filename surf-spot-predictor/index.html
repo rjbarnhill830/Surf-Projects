@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NorCal surf spot predictor</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <h1>NorCal surf spot predictor</h1>
+  <p class="sub">Rule-based model for six Sonoma / Marin / SF breaks. Spot profiles are built from published surf-forecast guides (Surfline and others); buoy snapshots come from NOAA NDBC. Log real sessions below and the model nudges its scoring toward what's actually worked for you.</p>
+
+  <section>
+    <h2>Current conditions</h2>
+    <div class="panel">
+      <div class="grid">
+        <div>
+          <div class="row-out"><span>Swell height</span><b id="swellHOut">6 ft</b></div>
+          <input type="range" id="swellH" min="1" max="15" step="1" value="6">
+        </div>
+        <div>
+          <div class="row-out"><span>Swell period</span><b id="swellPOut">12 s</b></div>
+          <input type="range" id="swellP" min="6" max="20" step="1" value="12">
+        </div>
+        <div>
+          <label>Swell direction</label>
+          <select id="swellDir">
+            <option value="270">W</option>
+            <option value="292" selected>WNW</option>
+            <option value="315">NW</option>
+            <option value="247">WSW</option>
+            <option value="225">SW</option>
+            <option value="180">S</option>
+          </select>
+        </div>
+        <div>
+          <div class="row-out"><span>Wind speed</span><b id="windSOut">10 mph</b></div>
+          <input type="range" id="windS" min="0" max="30" step="1" value="10">
+        </div>
+        <div>
+          <label>Wind direction</label>
+          <select id="windDir">
+            <option value="90" selected>E</option>
+            <option value="45">NE</option>
+            <option value="0">N</option>
+            <option value="315">NW</option>
+            <option value="270">W</option>
+            <option value="225">SW</option>
+            <option value="180">S</option>
+            <option value="135">SE</option>
+          </select>
+        </div>
+        <div>
+          <div class="row-out"><span>Tide</span><b id="tideFtOut">2.5 ft (Mid)</b></div>
+          <input type="range" id="tideFt" min="-2" max="7" step="0.5" value="2.5">
+        </div>
+        <div>
+          <label>Tide direction</label>
+          <select id="tideDir">
+            <option value="incoming">Incoming (rising)</option>
+            <option value="outgoing">Outgoing (falling)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="buoybar">
+        <button id="loadBodega">Load Bodega Bay buoy (46013)</button>
+        <button id="loadSF">Load San Francisco buoy (46026)</button>
+      </div>
+      <p class="buoynote" id="buoyNote">Buoys read swell straight offshore, not breaking wave height at the beach &mdash; expect the actual surf to run smaller and shaped by each spot's sandbar.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ranked spots</h2>
+    <p class="sub" id="hiddenNote" style="margin-bottom:12px;"></p>
+    <div class="results" id="results"></div>
+  </section>
+
+  <section>
+    <h2>Customize spot profiles</h2>
+    <p class="sub" style="margin-bottom:16px;">Edit any spot's ideal swell, wind and tide if you know it better than the published guides. Changes are saved to this browser and used in the ranking above.</p>
+    <div id="configCards" style="display:flex;flex-direction:column;gap:14px;"></div>
+  </section>
+
+  <section>
+    <h2>Load from your spreadsheet</h2>
+    <div class="panel">
+      <p class="sub" style="margin-bottom:14px;">This tool can't reach files on your computer on its own &mdash; browsers don't allow that. Instead, click below and pick your spreadsheet file directly; it's read right here in your browser and never leaves your machine. Do this again any time you've added new rows to the "Surf Tracker" tab.</p>
+      <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none;">
+      <button class="primary" id="pickFile">Choose spreadsheet file&hellip;</button>
+      <span id="fileName" style="margin-left:10px;font-size:12.5px;color:var(--muted);"></span>
+      <div id="fileParseResult" style="margin-top:14px;"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Import your session log</h2>
+    <div class="panel" id="importPanel">
+      <p class="sub" style="margin-bottom:14px;">From your spreadsheet: <b id="importSummary">98 sessions</b> across 15 spots. Moraga is now folded into Ocean Beach SF (it's one of the numbered avenues there), and Montara, San Gregorio, and Tunitas Creek were added as real spot profiles from published guides &mdash; though the single logged visit to each didn't record swell/wind, so no sessions were importable for those three yet. Ratings are inferred from the tone of your notes, not real ratings &mdash; review after importing and delete/re-log anything that reads wrong.</p>
+      <button class="primary" id="runImport">Import 98 sessions</button>
+      <span id="importMsg" style="margin-left:10px;font-size:12.5px;color:var(--good);"></span>
+      <div class="learn" style="margin-top:14px;">
+        <b>Not created:</b> Ross's Cove, Gazebos, Crease and Deadman's still have no published surf guide &mdash; those profiles stay session-data-only. <b>Still excluded:</b> Horners (3 entries with no dates, sandwiched inside a Hawaii trip cluster &mdash; likely a Kauai/Big Island spot, not NorCal) and one-off mentions (Steamer Lane, Asilomar). Hawaii sessions (Honoli'i, Banyans, Hanalei, Pakalas, Poipu, etc.) are intentionally left out of this NorCal tool.
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Log a session</h2>
+    <div class="panel">
+      <div class="logform">
+        <div>
+          <label>Date</label>
+          <input type="date" id="logDate">
+        </div>
+        <div>
+          <label>Spot</label>
+          <select id="logSpot"></select>
+        </div>
+        <div>
+          <label>Swell size (ft)</label>
+          <input type="number" id="logSwellH" min="1" max="20" value="4">
+        </div>
+        <div>
+          <label>Swell direction</label>
+          <select id="logSwellDir">
+            <option value="270">W</option>
+            <option value="292">WNW</option>
+            <option value="315">NW</option>
+            <option value="247">WSW</option>
+            <option value="225">SW</option>
+            <option value="180">S</option>
+          </select>
+        </div>
+        <div>
+          <label>Wind (mph)</label>
+          <input type="number" id="logWindS" min="0" max="40" value="8">
+        </div>
+        <div>
+          <label>Wind direction</label>
+          <select id="logWindDir">
+            <option value="90">E</option>
+            <option value="45">NE</option>
+            <option value="0">N</option>
+            <option value="315">NW</option>
+            <option value="270">W</option>
+            <option value="225">SW</option>
+            <option value="180">S</option>
+            <option value="135">SE</option>
+          </select>
+        </div>
+        <div>
+          <label>Tide</label>
+          <select id="logTide">
+            <option value="low">Low</option>
+            <option value="mid">Mid</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+      </div>
+      <label>How was it?</label>
+      <div class="stars" id="stars">
+        <span class="star" data-v="1">&#9733;</span>
+        <span class="star" data-v="2">&#9733;</span>
+        <span class="star" data-v="3">&#9733;</span>
+        <span class="star" data-v="4">&#9733;</span>
+        <span class="star" data-v="5">&#9733;</span>
+      </div>
+      <div style="height:12px;"></div>
+      <label>Notes (optional)</label>
+      <textarea id="logNotes" placeholder="Sandbar was working on the north end, glassy till 10am..."></textarea>
+      <div style="height:14px;"></div>
+      <button class="primary" id="saveSession">Log session</button>
+      <span id="saveMsg" style="margin-left:10px;font-size:12.5px;color:var(--good);"></span>
+    </div>
+
+    <div class="sessions" id="sessionList"></div>
+  </section>
+
+  <p class="footer-note">This is a heuristic model, not a trained forecast &mdash; it encodes published spot guidance, not verified wave-by-wave outcomes. Session data is stored locally in this browser and isn't sent anywhere.</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/data.js"></script>
+<script src="js/imported-sessions.js"></script>
+<script src="js/scoring.js"></script>
+<script src="js/spreadsheet.js"></script>
+<script src="js/ui-config.js"></script>
+<script src="js/ui-sessions.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

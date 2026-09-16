@@ -1,0 +1,104 @@
+const defaultSpots = [
+  {
+    id:"salmon-creek", name:"Salmon Creek Beach",
+    dir:247, dirTol:38, minH:3, maxH:10, windDir:112, windTol:45, maxWind:16, tideMin:1.5, tideMax:7, minPeriod:6, maxPeriod:22, tideDirection:"outgoing",
+    blurb:"Wide, powerful, exposed beach break. Best WSW swell, offshore ESE wind, mid-to-high tide falling."
+  },
+  {
+    id:"doran", name:"Bodega Head / Doran Beach",
+    dir:225, dirTol:35, minH:2, maxH:6, windDir:0, windTol:50, maxWind:18, tideMin:-2, tideMax:7, minPeriod:6, maxPeriod:22,
+    blurb:"Sheltered, south-facing, forgiving. Best SW swell, offshore N wind. Works most tides, easiest for beginners."
+  },
+  {
+    id:"dillon", name:"Dillon Beach",
+    dir:292, dirTol:38, minH:3, maxH:8, windDir:90, windTol:40, maxWind:15, tideMin:1.5, tideMax:7, minPeriod:6, maxPeriod:22,
+    blurb:"Shifty sandbars, remote. Best NW-W swell, offshore E wind, mid-to-high tide."
+  },
+  {
+    id:"stinson", name:"Stinson Beach",
+    dir:225, dirTol:32, minH:1, maxH:6, windDir:45, windTol:42, maxWind:14, tideMin:-2, tideMax:7, minPeriod:6, maxPeriod:22,
+    blurb:"Mellow, powerless, beginner-friendly. Best SW swell, offshore NE wind, works on all tide stages."
+  },
+  {
+    id:"pacifica", name:"Pacifica / Linda Mar",
+    dir:292, dirTol:40, minH:1, maxH:8, windDir:135, windTol:50, maxWind:22, tideMin:1.5, tideMax:7, minPeriod:6, maxPeriod:22, tideDirection:"incoming",
+    blurb:"Valley funnels S/SE wind offshore even when the coast is blown out. Best NW swell, incoming mid-to-high tide."
+  },
+  {
+    id:"oceanbeach", name:"Ocean Beach SF",
+    dir:270, dirTol:35, minH:4, maxH:18, windDir:90, windTol:35, maxWind:14, tideMin:-2, tideMax:4, minPeriod:6, maxPeriod:22,
+    blurb:"Big, powerful, tide-dominated. Takes almost any swell direction. Best offshore E wind, low-to-mid tide. Advanced. Includes Noriega, Taraval, Vicente, Judah, Moraga, Kelly's Cove and the numbered stairs."
+  },
+  {
+    id:"rockaway", name:"Rockaway Beach (Pacifica)",
+    dir:315, dirTol:40, minH:3, maxH:12, windDir:90, windTol:45, maxWind:18, tideMin:-2, tideMax:4, minPeriod:6, maxPeriod:22,
+    blurb:"Rocky cove with a deep channel at the north end &mdash; separate spot from Linda Mar and from SF's Ocean Beach. Best NW swell, low tide, channel lets you paddle out even when it's big."
+  },
+  {
+    id:"waddell", name:"Waddell Creek",
+    dir:247, dirTol:42, minH:2, maxH:12, windDir:45, windTol:45, maxWind:18, tideMin:1.5, tideMax:7, minPeriod:6, maxPeriod:22, tideDirection:"incoming",
+    blurb:"Reef, beach break and rivermouth combo near Davenport. Best SW-W swell, offshore NE wind, incoming-to-high tide. Handles almost anything."
+  },
+  {
+    id:"cronkite", name:"Fort Cronkite / Rodeo Beach",
+    dir:315, dirTol:55, minH:2, maxH:8, windDir:45, windTol:45, maxWind:15, tideMin:-2, tideMax:4, minPeriod:6, maxPeriod:22,
+    blurb:"Sheltered Marin Headlands cove, notoriously hard to predict. Takes S, N or W swell, offshore NE wind, low tide."
+  },
+  {
+    id:"davenport", name:"Davenport Left",
+    dir:260, dirTol:48, minH:3, maxH:10, windDir:45, windTol:40, maxWind:15, tideMin:-2, tideMax:4, minPeriod:6, maxPeriod:22,
+    blurb:"Left reef north of Santa Cruz. Best SW-NW swell, offshore NE wind, low-to-mid tide."
+  },
+  {
+    id:"palomarin", name:"Palomarin / Bolinas",
+    dir:216, dirTol:35, minH:1, maxH:6, windDir:0, windTol:50, maxWind:15, tideMin:-2, tideMax:4, minPeriod:6, maxPeriod:22,
+    blurb:"Marin coast reef/point near Bolinas. Best SW swell, light wind, low-to-mid tide. Notoriously localized."
+  },
+  {
+    id:"rosscove", name:"Ross's Cove",
+    dir:283, dirTol:35, minH:3, maxH:10, windDir:100, windTol:45, maxWind:16, tideMin:1.5, tideMax:7, minPeriod:6, maxPeriod:22,
+    blurb:"No published guide found &mdash; profile built entirely from your own sessions. West-facing, seems to like WNW swell and light offshore wind."
+  },
+  {
+    id:"gazebos", name:"Gazebos, South Left",
+    dir:298, dirTol:35, minH:3, maxH:10, windDir:100, windTol:45, maxWind:14, tideMin:1.5, tideMax:7, minPeriod:6, maxPeriod:22,
+    blurb:"No published guide found &mdash; based on your sessions, appears to be a Pacifica-area peak with exposure similar to Rockaway."
+  },
+  {
+    id:"crease", name:"Crease",
+    dir:283, dirTol:35, minH:3, maxH:10, windDir:100, windTol:45, maxWind:16, tideMin:1.5, tideMax:7, minPeriod:6, maxPeriod:22,
+    blurb:"No published guide found &mdash; only 2 logged sessions so far, both alongside Ross's Cove trips. Treat this profile as provisional."
+  },
+  {
+    id:"deadmans", name:"Deadman's",
+    dir:297, dirTol:35, minH:3, maxH:10, windDir:100, windTol:45, maxWind:14, tideMin:1.5, tideMax:7, minPeriod:6, maxPeriod:22,
+    blurb:"No published guide found &mdash; only 1 session had usable conditions data. Your notes mention needing more size to clear the rocks."
+  },
+  {
+    id:"montara", name:"Montara State Beach",
+    dir:292, dirTol:38, minH:3, maxH:10, windDir:90, windTol:42, maxWind:16, tideMin:-2, tideMax:4, minPeriod:6, maxPeriod:22,
+    blurb:"Exposed San Mateo beach break, faces the open Pacific. Best WNW-NW swell, offshore E wind, low-to-mid tide. Your one logged session had no conditions recorded, so nothing imported yet."
+  },
+  {
+    id:"sangregorio", name:"San Gregorio State Beach",
+    dir:225, dirTol:35, minH:2, maxH:8, windDir:90, windTol:42, maxWind:15, tideMin:1.5, tideMax:4, minPeriod:6, maxPeriod:22,
+    blurb:"San Mateo coast beach break. Best SW swell, offshore E wind, mid tide. Your one logged session had no conditions recorded, so nothing imported yet."
+  },
+  {
+    id:"tunitas", name:"Tunitas Creek",
+    dir:270, dirTol:42, minH:3, maxH:10, windDir:68, windTol:40, maxWind:14, tideMin:-2, tideMax:7, minPeriod:6, maxPeriod:22,
+    blurb:"San Mateo coast sand-bottom A-frames, inconsistent but rewarding. Best W-NW-SW swell, offshore NE-ESE wind, works most tides. Your one logged session had no conditions recorded, so nothing imported yet."
+  }
+];
+
+const buoyReadings = {
+  bodega: {label:"Bodega Bay (46013)", swellH:6.9, swellP:8, swellDir:315, windS:19, windDir:315, time:"5:40pm PDT, Sep 14 2026"},
+  sf: {label:"San Francisco (46026)", swellH:6.2, swellP:9, swellDir:292, windS:16, windDir:315, time:"10:40pm PDT, Sep 14 2026"}
+};
+
+const SPOT_OFFSHORE = {
+  'salmon-creek':112,'pacifica':135,'oceanbeach':90,
+  'rockaway':90,'waddell':45,'cronkite':45,'davenport':45,
+  'palomarin':0,'rosscove':100,'gazebos':100,'crease':100,'deadmans':100,
+  'montara':90,'sangregorio':90,'tunitas':68
+};
