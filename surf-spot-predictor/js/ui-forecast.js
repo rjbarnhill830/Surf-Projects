@@ -13,10 +13,6 @@ function formatForecastTime(iso){
   return `${wd} ${h}${ampm}`;
 }
 
-// Representative hours per day, coarse enough to keep the grid readable
-// across a full week.
-const FORECAST_SAMPLE_HOURS = [6,9,12,15,18,21];
-
 // Can't surf in the dark. Start 30 min before sunrise (enough light to check
 // and paddle out); stop recommending 90 min before sunset so there's still
 // time for an actual session before dusk, not just before full dark.
@@ -30,10 +26,10 @@ function isRecommendableDaylight(pt, daylightByDate){
   return minOfDay >= (day.sunriseMin - DAWN_BUFFER_MIN) && minOfDay <= (day.sunsetMin - DUSK_BUFFER_MIN);
 }
 
-// Marks which sampled points start a new calendar day, so the grid can show
-// a visible day-boundary border — with up to 6 columns/day across a week,
-// the table is wider than its container and needs a horizontal scroll that
-// isn't otherwise obvious.
+// Marks which points start a new calendar day, so the grid can show a
+// visible day-boundary border — every daylight hour is shown (not sampled),
+// so the table is wider than its container across more than a day or two and
+// needs a horizontal scroll that isn't otherwise obvious.
 function dayStartFlags(sampledPoints){
   let lastDate = null;
   return sampledPoints.map(p=>{
@@ -50,17 +46,6 @@ function scrollHintHtml(sampledPoints){
   return `<p class="buoynote" style="margin:0 0 6px;">Scroll to see all ${dayCount} days &rarr;</p>`;
 }
 
-function sampleTimeline(timeline){
-  const byDate = {};
-  timeline.forEach(pt=>{
-    const date = pt.time.slice(0,10);
-    const hour = +pt.time.slice(11,13);
-    if(!FORECAST_SAMPLE_HOURS.includes(hour)) return;
-    (byDate[date] = byDate[date] || []).push(pt);
-  });
-  return Object.keys(byDate).sort().flatMap(d=>byDate[d]);
-}
-
 function refreshForecastSectionLocations(){
   const sel = document.getElementById('fcLocation');
   sel.innerHTML = '';
@@ -75,6 +60,7 @@ function refreshForecastSectionLocations(){
 function resetForecastSection(){
   document.getElementById('forecastStatus').textContent = '';
   document.getElementById('forecastResults').innerHTML = '';
+  fcLastFetch = null;
 }
 
 // Populated fresh by renderForecastResults() and read by the delegated click
@@ -85,6 +71,11 @@ let fcCurrentSampledPoints = [];
 let fcCurrentOrderedSpots = [];
 let fcCurrentTideByStation = {};
 let fcCurrentFallbackStationId = null;
+
+// The raw fetch result, kept around so the min-score filter can re-render
+// instantly on its own "input" event without re-hitting the network — only
+// "Get forecast" (location/range change) needs a fresh fetch.
+let fcLastFetch = null;
 
 // Tide genuinely varies spot-to-spot, so it's looked up per spot (via that
 // spot's own tideStation) rather than baked into the shared timeline. A
@@ -150,12 +141,16 @@ function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, ti
   }
 
   const spotsToScore = activeSpots.filter(s=>!s.excluded);
-  const sampledPoints = sampleTimeline(timeline);
+  // Every daylight hour is shown now, not sampled down to a few per day —
+  // otherwise an hour like 5pm that falls between the old fixed sample
+  // times would never appear even when it's the best-scoring window.
+  const sampledPoints = timeline;
 
-  // Best pick per spot across the full hourly resolution (not just the
-  // sampled hours), so the "best window" call-out isn't limited to the
-  // coarser grid below. Tide is looked up per spot's own station, not one
-  // shared curve for the whole region.
+  const minScoreEl = document.getElementById('fcMinScore');
+  const minScore = minScoreEl ? (+minScoreEl.value || 0) : 0;
+
+  // Best pick per spot across the full hourly resolution. Tide is looked up
+  // per spot's own station, not one shared curve for the whole region.
   const bestPerSpot = {};
   timeline.forEach(pt=>{
     spotsToScore.forEach(spot=>{
@@ -166,12 +161,15 @@ function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, ti
       }
     });
   });
-  const bestPicks = Object.values(bestPerSpot).sort((a,b)=>b.score-a.score).slice(0,5);
+  const bestPicks = Object.values(bestPerSpot).filter(p=>p.score>=minScore).sort((a,b)=>b.score-a.score).slice(0,5);
 
   const bestBox = document.createElement('div');
   bestBox.innerHTML = '<h3 class="fc-heading">Best picks this window</h3>';
   const list = document.createElement('div');
   list.className = 'results';
+  if(bestPicks.length===0){
+    list.innerHTML = `<p class="empty">No spot reaches a score of ${minScore} in this window &mdash; lower the min score filter to see picks.</p>`;
+  }
   bestPicks.forEach(pick=>{
     const div = document.createElement('div');
     div.className = 'card';
@@ -213,31 +211,46 @@ function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, ti
 
   const gridBox = document.createElement('div');
   gridBox.innerHTML = '<h3 class="fc-heading">Spot scores by time</h3>' + scrollHintHtml(sampledPoints)
-    + '<p class="buoynote" style="margin:0 0 6px;">Click any score for the full swell/wind/tide breakdown.</p>';
+    + '<p class="buoynote" style="margin:0 0 6px;">Click any score for the full swell/wind/tide breakdown.'
+    + (minScore>0 ? ` Only showing scores &ge; ${minScore}.` : '') + '</p>';
   const gridWrap = document.createElement('div');
   gridWrap.className = 'fc-scroll';
   const grid = document.createElement('table');
   grid.className = 'forecast-grid';
-  const orderedSpots = [...spotsToScore].sort((a,b)=>{
-    const pa = bestPerSpot[a.id] ? bestPerSpot[a.id].score : 0;
-    const pb = bestPerSpot[b.id] ? bestPerSpot[b.id].score : 0;
-    return pb-pa;
-  });
-  grid.innerHTML = `
-    <thead><tr><th class="sticky-col"></th>${headerCellsHtml}</tr></thead>
-    <tbody>
-      ${orderedSpots.map(spot=>{
-        const cells = sampledPoints.map((p,i)=>{
-          const conditions = Object.assign({waveStyles: userWaveStyles}, p, tideForSpotAt(spot, p.time, tideByStation, fallbackStationId));
-          const r = scoreSpot(spot, conditions, sessionCache, userSkillLevel);
-          return `<td class="fc-cell${dayStarts[i]?' day-start':''}" data-point-idx="${i}" data-spot-id="${spot.id}" style="background:${barColor(r.score)};color:#fff;">${r.score}</td>`;
-        }).join('');
-        return `<tr><td class="sticky-col">${spot.name}</td>${cells}</tr>`;
-      }).join('')}
-    </tbody>
-  `;
-  gridWrap.appendChild(grid);
-  gridBox.appendChild(gridWrap);
+  // Rows below the min-score filter are dropped entirely (an all-dash row
+  // adds nothing); the individual cells that fall short within a row that
+  // does qualify are blanked out rather than the row being dropped, so a
+  // spot that's only good on one afternoon still shows that one afternoon.
+  const orderedSpots = [...spotsToScore]
+    .filter(spot => (bestPerSpot[spot.id] ? bestPerSpot[spot.id].score : 0) >= minScore)
+    .sort((a,b)=>{
+      const pa = bestPerSpot[a.id] ? bestPerSpot[a.id].score : 0;
+      const pb = bestPerSpot[b.id] ? bestPerSpot[b.id].score : 0;
+      return pb-pa;
+    });
+  if(orderedSpots.length===0){
+    gridBox.innerHTML += `<p class="empty">No spot reaches a score of ${minScore} in this window &mdash; lower the min score filter to see the grid.</p>`;
+  }else{
+    grid.innerHTML = `
+      <thead><tr><th class="sticky-col"></th>${headerCellsHtml}</tr></thead>
+      <tbody>
+        ${orderedSpots.map(spot=>{
+          const cells = sampledPoints.map((p,i)=>{
+            const conditions = Object.assign({waveStyles: userWaveStyles}, p, tideForSpotAt(spot, p.time, tideByStation, fallbackStationId));
+            const r = scoreSpot(spot, conditions, sessionCache, userSkillLevel);
+            const dayCls = dayStarts[i]?' day-start':'';
+            if(r.score < minScore){
+              return `<td class="fc-cell${dayCls}" data-point-idx="${i}" data-spot-id="${spot.id}" style="background:var(--muted);color:var(--mid);">&ndash;</td>`;
+            }
+            return `<td class="fc-cell${dayCls}" data-point-idx="${i}" data-spot-id="${spot.id}" style="background:${barColor(r.score)};color:#fff;">${r.score}</td>`;
+          }).join('');
+          return `<tr><td class="sticky-col">${spot.name}</td>${cells}</tr>`;
+        }).join('')}
+      </tbody>
+    `;
+    gridWrap.appendChild(grid);
+    gridBox.appendChild(gridWrap);
+  }
   resultsEl.appendChild(gridBox);
 
   const failedStations = Object.entries(tideByStation).filter(([,v])=>v.error);
@@ -246,7 +259,7 @@ function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, ti
     note.className = 'buoynote';
     if(failedStations.length){
       const spotNames = new Set();
-      orderedSpots.forEach(spot=>{
+      spotsToScore.forEach(spot=>{
         const stationId = spot.tideStation || fallbackStationId;
         if(failedStations.some(([id])=>id===stationId)) spotNames.add(spot.name);
       });
@@ -285,6 +298,7 @@ function initForecastSection(){
     try{
       const spotsForTide = activeSpots.filter(s=>!s.excluded);
       const {timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate} = await fetchForecastTimeline(loc, days, spotsForTide);
+      fcLastFetch = {timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate};
       renderForecastResults(timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate);
       statusEl.textContent = `Loaded ${timeline.length} hourly points for ${loc.label}, filtered to daylight (${DAWN_BUFFER_MIN}min before sunrise through ${DUSK_BUFFER_MIN}min before sunset).`;
     }catch(err){
@@ -292,5 +306,13 @@ function initForecastSection(){
     }finally{
       btn.disabled = false;
     }
+  });
+
+  // Re-render instantly from the already-fetched data when the min-score
+  // filter changes, rather than requiring another "Get forecast" click.
+  document.getElementById('fcMinScore').addEventListener('input', ()=>{
+    if(!fcLastFetch) return;
+    const {timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate} = fcLastFetch;
+    renderForecastResults(timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate);
   });
 }
