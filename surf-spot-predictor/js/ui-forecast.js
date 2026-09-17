@@ -83,12 +83,27 @@ function resetForecastSection(){
 // re-attach listeners (and risk piling them up) on every "Get forecast" run.
 let fcCurrentSampledPoints = [];
 let fcCurrentOrderedSpots = [];
+let fcCurrentTideByStation = {};
+let fcCurrentFallbackStationId = null;
 
-function pointDetailHtml(pt, spot){
-  const tideText = pt.tideFt!=null ? `${pt.tideFt}ft (${pt.tideDir||'unknown direction'})` : 'not available';
+// Tide genuinely varies spot-to-spot, so it's looked up per spot (via that
+// spot's own tideStation) rather than baked into the shared timeline. A
+// click with no spot context (the wind-timeline row) falls back to the
+// forecast location's own regional station.
+function tideForSpotAt(spot, time, tideByStation, fallbackStationId){
+  const stationId = (spot && spot.tideStation) || fallbackStationId;
+  const entry = stationId && tideByStation[stationId];
+  const pt = entry && entry.byTime[time];
+  return { tideFt: pt ? pt.ft : null, tideDir: pt ? pt.direction : null };
+}
+
+function pointDetailHtml(pt, spot, tideByStation, fallbackStationId){
+  const tide = tideForSpotAt(spot, pt.time, tideByStation, fallbackStationId);
+  const tideText = tide.tideFt!=null ? `${tide.tideFt}ft (${tide.tideDir||'unknown direction'})` : 'not available';
   let scoreSection = '';
   if(spot){
-    const r = scoreSpot(spot, Object.assign({waveStyles: userWaveStyles}, pt), sessionCache, userSkillLevel);
+    const conditions = Object.assign({waveStyles: userWaveStyles}, pt, tide);
+    const r = scoreSpot(spot, conditions, sessionCache, userSkillLevel);
     scoreSection = `
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);">
         <b>${spot.name}</b> &mdash; <span style="color:${barColor(r.score)};font-weight:700;">${r.score}</span>
@@ -109,7 +124,7 @@ function pointDetailHtml(pt, spot){
   `;
 }
 
-function showPointDetail(pt, spot){
+function showPointDetail(pt, spot, tideByStation, fallbackStationId){
   const resultsEl = document.getElementById('forecastResults');
   let panel = document.getElementById('fcPointDetail');
   if(!panel){
@@ -119,12 +134,12 @@ function showPointDetail(pt, spot){
     panel.style.marginTop = '14px';
     resultsEl.appendChild(panel);
   }
-  panel.innerHTML = pointDetailHtml(pt, spot);
+  panel.innerHTML = pointDetailHtml(pt, spot, tideByStation, fallbackStationId);
   document.getElementById('fcPointDetailClose').addEventListener('click', ()=>panel.remove());
   panel.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
-function renderForecastResults(rawTimeline, tideAvailable, tideError, daylightByDate){
+function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate){
   const resultsEl = document.getElementById('forecastResults');
   resultsEl.innerHTML = '';
   const timeline = rawTimeline.filter(pt=>isRecommendableDaylight(pt, daylightByDate));
@@ -139,11 +154,12 @@ function renderForecastResults(rawTimeline, tideAvailable, tideError, daylightBy
 
   // Best pick per spot across the full hourly resolution (not just the
   // sampled hours), so the "best window" call-out isn't limited to the
-  // coarser grid below.
+  // coarser grid below. Tide is looked up per spot's own station, not one
+  // shared curve for the whole region.
   const bestPerSpot = {};
   timeline.forEach(pt=>{
-    const conditions = Object.assign({waveStyles: userWaveStyles}, pt);
     spotsToScore.forEach(spot=>{
+      const conditions = Object.assign({waveStyles: userWaveStyles}, pt, tideForSpotAt(spot, pt.time, tideByStation, fallbackStationId));
       const r = scoreSpot(spot, conditions, sessionCache, userSkillLevel);
       if(!bestPerSpot[spot.id] || r.score > bestPerSpot[spot.id].score){
         bestPerSpot[spot.id] = {spot, time:pt.time, score:r.score};
@@ -174,6 +190,8 @@ function renderForecastResults(rawTimeline, tideAvailable, tideError, daylightBy
 
   fcCurrentSampledPoints = sampledPoints;
   fcCurrentOrderedSpots = spotsToScore;
+  fcCurrentTideByStation = tideByStation;
+  fcCurrentFallbackStationId = fallbackStationId;
 
   const dayStarts = dayStartFlags(sampledPoints);
   const headerCellsHtml = sampledPoints.map((p,i)=>`<th${dayStarts[i]?' class="day-start"':''}>${formatForecastTime(p.time)}</th>`).join('');
@@ -210,7 +228,8 @@ function renderForecastResults(rawTimeline, tideAvailable, tideError, daylightBy
     <tbody>
       ${orderedSpots.map(spot=>{
         const cells = sampledPoints.map((p,i)=>{
-          const r = scoreSpot(spot, Object.assign({waveStyles: userWaveStyles}, p), sessionCache, userSkillLevel);
+          const conditions = Object.assign({waveStyles: userWaveStyles}, p, tideForSpotAt(spot, p.time, tideByStation, fallbackStationId));
+          const r = scoreSpot(spot, conditions, sessionCache, userSkillLevel);
           return `<td class="fc-cell${dayStarts[i]?' day-start':''}" data-point-idx="${i}" data-spot-id="${spot.id}" style="background:${barColor(r.score)};color:#fff;">${r.score}</td>`;
         }).join('');
         return `<tr><td class="sticky-col">${spot.name}</td>${cells}</tr>`;
@@ -221,12 +240,20 @@ function renderForecastResults(rawTimeline, tideAvailable, tideError, daylightBy
   gridBox.appendChild(gridWrap);
   resultsEl.appendChild(gridBox);
 
-  if(!tideAvailable){
+  const failedStations = Object.entries(tideByStation).filter(([,v])=>v.error);
+  if(!tideAvailable || failedStations.length){
     const note = document.createElement('p');
     note.className = 'buoynote';
-    note.textContent = tideError
-      ? `Tide data unavailable (${tideError}) — scores above don't factor in tide.`
-      : 'No tide source configured for this zone yet — scores above don\'t factor in tide.';
+    if(failedStations.length){
+      const spotNames = new Set();
+      orderedSpots.forEach(spot=>{
+        const stationId = spot.tideStation || fallbackStationId;
+        if(failedStations.some(([id])=>id===stationId)) spotNames.add(spot.name);
+      });
+      note.textContent = `Tide data unavailable for ${spotNames.size ? [...spotNames].join(', ') : 'some spots'} (${failedStations.map(([,v])=>v.error).join(' ')}) — those scores don't factor in tide.`;
+    }else{
+      note.textContent = 'No tide source configured for this zone yet — scores above don\'t factor in tide.';
+    }
     resultsEl.appendChild(note);
   }
 }
@@ -244,7 +271,7 @@ function initForecastSection(){
     const pt = fcCurrentSampledPoints[+td.dataset.pointIdx];
     if(!pt) return;
     const spot = td.dataset.spotId ? fcCurrentOrderedSpots.find(s=>s.id===td.dataset.spotId) : null;
-    showPointDetail(pt, spot);
+    showPointDetail(pt, spot, fcCurrentTideByStation, fcCurrentFallbackStationId);
   });
 
   document.getElementById('runForecast').addEventListener('click', async ()=>{
@@ -256,8 +283,9 @@ function initForecastSection(){
     statusEl.textContent = 'Loading forecast…';
     document.getElementById('forecastResults').innerHTML = '';
     try{
-      const {timeline, tideAvailable, tideError, daylightByDate} = await fetchForecastTimeline(loc, days);
-      renderForecastResults(timeline, tideAvailable, tideError, daylightByDate);
+      const spotsForTide = activeSpots.filter(s=>!s.excluded);
+      const {timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate} = await fetchForecastTimeline(loc, days, spotsForTide);
+      renderForecastResults(timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate);
       statusEl.textContent = `Loaded ${timeline.length} hourly points for ${loc.label}, filtered to daylight (${DAWN_BUFFER_MIN}min before sunrise through ${DUSK_BUFFER_MIN}min before sunset).`;
     }catch(err){
       statusEl.textContent = `Couldn't load the forecast: ${err.message}`;

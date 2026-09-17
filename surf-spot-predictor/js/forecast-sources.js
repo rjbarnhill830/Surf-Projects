@@ -91,20 +91,30 @@ async function fetchOpenMeteoForecast(lat, lon, hourOffset){
   };
 }
 
-// NOAA CO-OPS hourly tide predictions (feet, MLLW datum) — free, public, no
-// API key, US stations only. Returns [{time, ft, direction}], direction
-// derived by comparing each point to its neighbor since CO-OPS predictions
-// don't include it directly.
+// NOAA CO-OPS high/low tide extrema (feet, MLLW datum) — free, public, no API
+// key, US stations only. Requests interval=hilo rather than hourly because
+// that's the only interval NOAA's predictions API accepts for "subordinate"
+// stations (the much more numerous, more localized stations that only carry
+// time/height offsets from a nearby reference station rather than full
+// harmonic constituents) — and it works fine for full "reference" stations
+// too, so using it universally means one code path handles both station
+// types without needing to know which kind a given ID is.
 // beginDateStr/endDateStr are "YYYY-MM-DD" in the forecast location's own
 // local time (i.e. taken straight from the swell timeline's own date
-// strings) — NOT computed from the browser's clock. A viewer whose browser
-// timezone sits ahead of the location's (anyone not physically in Pacific
-// time, or just a machine set to UTC) would otherwise get a tide window
-// shifted a day off from the actual swell/wind timeline, silently dropping
-// tide for part of the range.
-async function fetchTidePredictions(stationId, beginDateStr, endDateStr){
-  const toNoaaDate = s => s.replace(/-/g,'');
-  const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=surf_spot_predictor&begin_date=${toNoaaDate(beginDateStr)}&end_date=${toNoaaDate(endDateStr)}&datum=MLLW&station=${stationId}&time_zone=lst_ldt&units=english&interval=h&format=json`;
+// strings) — NOT computed from the browser's clock, for the same reason
+// noted below in fetchForecastTimeline. The request pads one extra day on
+// each side so every timeline point has a real high/low bracketing it on
+// both sides to interpolate between (see interpolateTideCurve).
+async function fetchTideExtrema(stationId, beginDateStr, endDateStr){
+  const shiftDate = (s, deltaDays) => {
+    const [y,m,d] = s.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m-1, d));
+    dt.setUTCDate(dt.getUTCDate()+deltaDays);
+    return `${dt.getUTCFullYear()}${String(dt.getUTCMonth()+1).padStart(2,'0')}${String(dt.getUTCDate()).padStart(2,'0')}`;
+  };
+  const beginParam = shiftDate(beginDateStr, -1);
+  const endParam = shiftDate(endDateStr, 1);
+  const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=surf_spot_predictor&begin_date=${beginParam}&end_date=${endParam}&datum=MLLW&station=${stationId}&time_zone=lst_ldt&units=english&interval=hilo&format=json`;
 
   let res;
   try{
@@ -116,19 +126,66 @@ async function fetchTidePredictions(stationId, beginDateStr, endDateStr){
   const data = await res.json();
   if(data.error) throw new Error(`NOAA tide station ${stationId}: ${data.error.message || 'unknown error'}.`);
   const preds = data.predictions;
-  if(!preds || preds.length===0) throw new Error(`NOAA tide station ${stationId} returned no predictions.`);
+  if(!preds || preds.length<2) throw new Error(`NOAA tide station ${stationId} returned too few high/low points to build a curve.`);
 
-  const points = preds.map(p=>({ time: p.t.replace(' ','T'), ft: parseFloat(p.v) }));
-  points.forEach((pt,i)=>{
-    if(i < points.length-1){
-      pt.direction = points[i+1].ft < pt.ft ? 'outgoing' : 'incoming';
-    }else if(i > 0){
-      pt.direction = points[i-1].ft > pt.ft ? 'outgoing' : 'incoming';
-    }else{
-      pt.direction = 'incoming';
+  return preds
+    .map(p=>({ time: p.t.replace(' ','T'), ft: parseFloat(p.v), type: p.type }))
+    .sort((a,b)=> a.time<b.time ? -1 : a.time>b.time ? 1 : 0);
+}
+
+// Parses a naive "YYYY-MM-DDTHH:MM" local-clock string (no timezone info —
+// same shape Open-Meteo and NOAA both return here) into a comparable number,
+// via Date.UTC so it's never reinterpreted through the runtime's own
+// timezone. Only used for relative comparisons between these naive strings,
+// never mixed with a real UTC instant.
+function parseLocalIsoMs(s){
+  const [datePart, timePart] = s.split('T');
+  const [y,mo,d] = datePart.split('-').map(Number);
+  const [hh,mm] = timePart.split(':').map(Number);
+  return Date.UTC(y, mo-1, d, hh, mm);
+}
+
+// Builds an hourly-equivalent tide curve from NOAA's sparse high/low extrema
+// using cosine interpolation between each consecutive pair — a standard
+// approximation of real tide shape (closer to the actual sinusoid-like curve
+// than a straight line, especially near the extrema where the real tide is
+// nearly flat). Returns {[isoTime]: {ft, direction}} for exactly the
+// requested target times; times outside the extrema range are clamped flat
+// to the nearest known extremum instead of erroring, though the 1-day
+// request padding above should make that a rare edge case.
+function interpolateTideCurve(extrema, targetTimes){
+  const pts = extrema.map(e=>({...e, ms: parseLocalIsoMs(e.time)}));
+  const byTime = {};
+  targetTimes.forEach(t=>{
+    const ms = parseLocalIsoMs(t);
+    let lo=null, hi=null;
+    for(const p of pts){
+      if(p.ms<=ms) lo=p;
+      if(p.ms>=ms && !hi) hi=p;
     }
+    let ft, direction;
+    if(lo && hi && lo!==hi){
+      const frac = (ms-lo.ms)/(hi.ms-lo.ms);
+      ft = lo.ft + (hi.ft-lo.ft) * (1-Math.cos(Math.PI*frac))/2;
+      direction = hi.ft>=lo.ft ? 'incoming' : 'outgoing';
+    }else if(lo){
+      ft = lo.ft; direction = lo.type==='H' ? 'outgoing' : 'incoming';
+    }else if(hi){
+      ft = hi.ft; direction = hi.type==='H' ? 'incoming' : 'outgoing';
+    }else{
+      return;
+    }
+    byTime[t] = { ft: Math.round(ft*10)/10, direction };
   });
-  return points;
+  return byTime;
+}
+
+// Fetches and interpolates the full tide curve for one station across the
+// given target times in one call — the unit fetchForecastTimeline uses per
+// unique tideStation among the spots being scored.
+async function fetchTidePredictions(stationId, beginDateStr, endDateStr, targetTimes){
+  const extrema = await fetchTideExtrema(stationId, beginDateStr, endDateStr);
+  return interpolateTideCurve(extrema, targetTimes);
 }
 
 // Standard astronomical sunrise equation (public-domain math, the same
@@ -176,13 +233,20 @@ function sunTimesLocalMinutes(dateStr, lat, lon, utcOffsetSeconds){
   return { sunriseMin: toLocalMinutes(sun.sunrise), sunsetMin: toLocalMinutes(sun.sunset) };
 }
 
-// Full hourly swell + wind + (where available) tide timeline for a
-// reference location, merged by timestamp into the same shape scoreSpot()
-// expects. Missing tide (no station for this zone, or the NOAA fetch
-// failed) yields tideFt/tideDir: null on every point rather than breaking
-// the merge — checkRange() in scoring.js treats null tide as neutral, not
-// as an actual low reading.
-async function fetchForecastTimeline(location, days){
+// Full hourly swell + wind timeline for a reference location, merged by
+// timestamp into the same shape scoreSpot() expects (minus tide, which is
+// now fetched separately per station — see tideByStation below, since tide
+// genuinely varies spot-to-spot and a single shared curve for the whole
+// region isn't precise enough).
+//
+// spots is the list of spot objects being scored against this location
+// (activeSpots from ui-forecast.js) — used only to collect the distinct
+// tideStation IDs actually in use, so each one is fetched once regardless of
+// how many spots share it. tideByStation is {[stationId]: {byTime, error}};
+// a station whose fetch fails still returns an entry (byTime: {}, error: message)
+// rather than being omitted, so callers can tell "no station configured" apart
+// from "station configured but the fetch failed".
+async function fetchForecastTimeline(location, days, spots){
   const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${location.lat}&longitude=${location.lon}&hourly=swell_wave_height,swell_wave_period,swell_wave_direction&timezone=auto&forecast_days=${days}`;
   const windUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&hourly=windspeed_10m,winddirection_10m&wind_speed_unit=mph&timezone=auto&forecast_days=${days}`;
 
@@ -204,37 +268,38 @@ async function fetchForecastTimeline(location, days){
     windByTime[t] = { s: wind.hourly.windspeed_10m[i], d: wind.hourly.winddirection_10m[i] };
   });
 
-  let tideByTime = {};
-  let tideError = null;
-  if(location.tideStation){
-    try{
-      const beginDateStr = times[0].slice(0,10);
-      const endDateStr = times[times.length-1].slice(0,10);
-      const tidePoints = await fetchTidePredictions(location.tideStation, beginDateStr, endDateStr);
-      tidePoints.forEach(p=>{ tideByTime[p.time] = p; });
-    }catch(e){
-      tideError = e.message;
-    }
-  }
-
   const timeline = times.map((t,i)=>{
     const hM = marine.hourly.swell_wave_height[i];
     const p = marine.hourly.swell_wave_period[i];
     const d = marine.hourly.swell_wave_direction[i];
     if(hM==null || p==null || d==null) return null;
     const w = windByTime[t];
-    const tide = tideByTime[t];
     return {
       time: t,
       swellH: Math.round(hM*M_TO_FT*10)/10,
       swellP: Math.round(p),
       swellDir: Math.round(d),
       windS: w && w.s!=null ? Math.round(w.s) : null,
-      windDir: w && w.d!=null ? Math.round(w.d) : null,
-      tideFt: tide ? Math.round(tide.ft*10)/10 : null,
-      tideDir: tide ? tide.direction : null
+      windDir: w && w.d!=null ? Math.round(w.d) : null
     };
   }).filter(Boolean);
+
+  const allTimes = timeline.map(pt=>pt.time);
+  const beginDateStr = allTimes[0].slice(0,10);
+  const endDateStr = allTimes[allTimes.length-1].slice(0,10);
+  const stationIds = new Set((spots||[]).map(s=>s.tideStation).filter(Boolean));
+  if(location.tideStation) stationIds.add(location.tideStation);
+
+  const tideByStation = {};
+  await Promise.all([...stationIds].map(async stationId=>{
+    try{
+      tideByStation[stationId] = { byTime: await fetchTidePredictions(stationId, beginDateStr, endDateStr, allTimes), error: null };
+    }catch(e){
+      tideByStation[stationId] = { byTime: {}, error: e.message };
+    }
+  }));
+
+  const fallback = location.tideStation ? tideByStation[location.tideStation] : null;
 
   const utcOffsetSeconds = marine.utc_offset_seconds || 0;
   const daylightByDate = {};
@@ -244,8 +309,10 @@ async function fetchForecastTimeline(location, days){
 
   return {
     timeline,
-    tideAvailable: !!location.tideStation && !tideError,
-    tideError,
+    tideByStation,
+    fallbackStationId: location.tideStation || null,
+    tideAvailable: !!fallback && !fallback.error,
+    tideError: fallback ? fallback.error : null,
     daylightByDate
   };
 }
