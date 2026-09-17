@@ -8,7 +8,7 @@
 // blocked or slow Leaflet CDN load degrades gracefully instead of crashing
 // the page (see the comment on ensureMapPickerInitialized for why).
 let spotsOverviewLeaflet = null;
-let spotsOverviewMarkers = [];
+let spotsOverviewClusterGroup = null;
 
 // Whether the next click on empty map area should create a new custom spot
 // there. Off by default so idle panning/exploring the map never accidentally
@@ -26,6 +26,17 @@ function ensureSpotsOverviewMapInitialized(){
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(spotsOverviewLeaflet);
+  // Groups markers into a numbered cluster bubble once they're too close
+  // together to tell apart — several of the personal/informal spots share
+  // an identical placeholder coordinate (see data.js), which without this
+  // would stack into indistinguishable overlapping pins. Falls back to a
+  // plain (non-clustering) layer group if the clustering plugin's script
+  // failed to load even though Leaflet itself did, same defensive spirit
+  // as the L-undefined check above.
+  spotsOverviewClusterGroup = (typeof L.markerClusterGroup === 'function')
+    ? L.markerClusterGroup({maxClusterRadius: 50})
+    : L.layerGroup();
+  spotsOverviewClusterGroup.addTo(spotsOverviewLeaflet);
   // Popup content is only added to the DOM once Leaflet opens it, and
   // Leaflet stops popup clicks from bubbling past the popup container (so
   // they don't also register as a map click) — that also stops them from
@@ -115,17 +126,16 @@ function renderSpotsOverviewMap(){
   }
   if(addBtn) addBtn.style.display = '';
 
-  spotsOverviewMarkers.forEach(m=>spotsOverviewLeaflet.removeLayer(m));
-  spotsOverviewMarkers = [];
+  spotsOverviewClusterGroup.clearLayers();
 
   // Includes hidden/excluded spots too — this map mirrors the full card
   // list below (which also still shows hidden spots, just badged), not the
   // filtered Ranked spots list.
   const located = activeSpots.filter(s=>s.lat!=null && s.lon!=null);
   located.forEach(spot=>{
-    const marker = L.marker([spot.lat, spot.lon]).addTo(spotsOverviewLeaflet);
+    const marker = L.marker([spot.lat, spot.lon]);
     marker.bindPopup(spotsOverviewPopupHtml(spot));
-    spotsOverviewMarkers.push(marker);
+    spotsOverviewClusterGroup.addLayer(marker);
   });
 
   if(located.length>0){
