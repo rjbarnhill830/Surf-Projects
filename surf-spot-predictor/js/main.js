@@ -93,6 +93,37 @@ function renderForecastCompare(locId){
   box.innerHTML = `<div class="sessions" style="margin-top:12px;">${rows.join('')}</div>`;
 }
 
+// Shows the full hourly swell/wind trend from an Open-Meteo "Load forecast"
+// fetch (not just the single reading closest to the requested hour), so you
+// can see how conditions build toward — or fall away from — that hour
+// rather than only getting a single snapshot. Reuses the same
+// forecast-grid/fc-scroll styling as the week-ahead Forecast section for a
+// consistent look. formatForecastTime/dayStartFlags/scrollHintHtml come from
+// js/ui-forecast.js, loaded earlier on the page.
+function renderOpenMeteoTrend(timeline, targetTime){
+  const box = document.getElementById('openMeteoTrend');
+  if(!timeline || timeline.length===0){ box.innerHTML=''; return; }
+  const hasSwell2 = timeline.some(p=>p.swellH2!=null);
+  const dayStarts = dayStartFlags(timeline);
+  const targetIdx = timeline.findIndex(p=>p.time===targetTime);
+  const cellCls = i => `${dayStarts[i]?' day-start':''}${i===targetIdx?' trend-target':''}`;
+  const headerCells = timeline.map((p,i)=>`<th class="${cellCls(i)}">${formatForecastTime(p.time)}</th>`).join('');
+  const swellRow = `<tr><td class="sticky-col">${hasSwell2?'Swell 1':'Swell'}</td>${timeline.map((p,i)=>`<td class="${cellCls(i)}">${p.swellH}ft @ ${p.swellP}s ${dirLabel(p.swellDir)}</td>`).join('')}</tr>`;
+  const swell2Row = hasSwell2 ? `<tr><td class="sticky-col">Swell 2</td>${timeline.map((p,i)=>`<td class="${cellCls(i)}">${p.swellH2!=null?`${p.swellH2}ft @ ${p.swellP2}s ${dirLabel(p.swellDir2)}`:'–'}</td>`).join('')}</tr>` : '';
+  const windRow = `<tr><td class="sticky-col">Wind</td>${timeline.map((p,i)=>`<td class="${cellCls(i)}">${p.windS!=null?p.windS+'mph '+dirLabel(p.windDir):'–'}</td>`).join('')}</tr>`;
+  box.innerHTML = `
+    <h3 class="fc-heading" style="margin-top:18px;">Hourly trend</h3>
+    ${scrollHintHtml(timeline)}
+    <p class="buoynote" style="margin:0 0 6px;">Highlighted column is the hour loaded into the sliders above.</p>
+    <div class="fc-scroll">
+      <table class="forecast-grid">
+        <thead><tr><th class="sticky-col"></th>${headerCells}</tr></thead>
+        <tbody>${swellRow}${swell2Row}${windRow}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 function refreshForecastLocationOptions(){
   const locSelect = document.getElementById('forecastLocation');
   locSelect.innerHTML = '';
@@ -104,6 +135,7 @@ function refreshForecastLocationOptions(){
   });
   renderForecastCompare(locSelect.value);
   updateBuoyButtonAvailability();
+  document.getElementById('openMeteoTrend').innerHTML = '';
 }
 
 function updateBuoyButtonAvailability(){
@@ -142,6 +174,10 @@ function initConditionsPanel(){
       applyReadingToConditions(reading);
       loadedReadings[loc.id] = Object.assign({}, loadedReadings[loc.id], {buoy: reading});
       renderForecastCompare(loc.id);
+      // NDBC is a single live reading, not an hourly forecast — any trend
+      // table on screen belongs to a previous Open-Meteo fetch and would now
+      // be showing a different hour than what's in the sliders.
+      document.getElementById('openMeteoTrend').innerHTML = '';
       lastForecastSnapshot = {source:'ndbc', station:loc.ndbcStation, location:loc.label, reading};
       noteEl.textContent = `Loaded live NDBC buoy ${loc.ndbcStation} (${loc.label}) reading from ${reading.time}. This is straight offshore swell, not breaking wave height at the beach.`;
       render();
@@ -163,6 +199,7 @@ function initConditionsPanel(){
       applyReadingToConditions(reading);
       loadedReadings[loc.id] = Object.assign({}, loadedReadings[loc.id], {openMeteo: reading});
       renderForecastCompare(loc.id);
+      renderOpenMeteoTrend(reading.timeline, reading.time);
       lastForecastSnapshot = {source:'open-meteo', location:loc.label, hourOffset, reading};
       noteEl.textContent = `Loaded Open-Meteo forecast for ${loc.label} at ${reading.time}. Model-based swell, not Surfline's spot-corrected forecast.`;
       render();

@@ -43,8 +43,50 @@ async function fetchNdbcBuoy(stationId){
   };
 }
 
-// Combines Open-Meteo's Marine API (swell) and Weather API (wind), matching
-// the closest hourly timestamp to now + hourOffset hours. Both are free,
+// Merges Open-Meteo's marine + wind hourly JSON into per-hour points, one
+// per timestamp that has at least valid primary swell data. Shared by
+// fetchOpenMeteoForecast (a single closest-hour reading, plus the full
+// timeline for the hourly trend table) and fetchForecastTimeline (the
+// week-ahead scoring grid) so both parse the same feed shape the same way.
+// The ocean usually has more than one swell running at once — Open-Meteo's
+// secondary partition, when present, is included alongside the primary; a
+// missing/zero reading just means no second swell that hour, not bad data.
+function buildOpenMeteoTimeline(marine, wind){
+  const times = marine?.hourly?.time;
+  if(!times || times.length===0) return [];
+  const windByTime = {};
+  (wind?.hourly?.time || []).forEach((t,i)=>{
+    windByTime[t] = { s: wind.hourly.windspeed_10m[i], d: wind.hourly.winddirection_10m[i] };
+  });
+  return times.map((t,i)=>{
+    const hM = marine.hourly.swell_wave_height[i];
+    const p = marine.hourly.swell_wave_period[i];
+    const d = marine.hourly.swell_wave_direction[i];
+    if(hM==null || p==null || d==null) return null;
+    const w = windByTime[t];
+    const hM2 = marine.hourly.secondary_swell_wave_height?.[i];
+    const p2 = marine.hourly.secondary_swell_wave_period?.[i];
+    const d2 = marine.hourly.secondary_swell_wave_direction?.[i];
+    const hasSwell2 = hM2!=null && p2!=null && d2!=null && hM2>0;
+    return {
+      time: t,
+      swellH: Math.round(hM*M_TO_FT*10)/10,
+      swellP: Math.round(p),
+      swellDir: Math.round(d),
+      swellH2: hasSwell2 ? Math.round(hM2*M_TO_FT*10)/10 : null,
+      swellP2: hasSwell2 ? Math.round(p2) : null,
+      swellDir2: hasSwell2 ? Math.round(d2) : null,
+      windS: w && w.s!=null ? Math.round(w.s) : null,
+      windDir: w && w.d!=null ? Math.round(w.d) : null
+    };
+  }).filter(Boolean);
+}
+
+// Combines Open-Meteo's Marine API (swell) and Weather API (wind). Returns
+// both the single reading closest to now + hourOffset hours (for the
+// "Current conditions" sliders) and the full fetched hourly timeline (for
+// the trend table below them, so the whole ~3-day forecast_days window is
+// visible, not just the one requested hour). Both source APIs are free,
 // public, no API key, and documented as CORS-enabled for browser use.
 async function fetchOpenMeteoForecast(lat, lon, hourOffset){
   const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=swell_wave_height,swell_wave_period,swell_wave_direction,secondary_swell_wave_height,secondary_swell_wave_period,secondary_swell_wave_direction&timezone=auto&forecast_days=3`;
@@ -61,46 +103,17 @@ async function fetchOpenMeteoForecast(lat, lon, hourOffset){
 
   const marine = await marineRes.json();
   const wind = await windRes.json();
-  const times = marine?.hourly?.time;
-  if(!times || times.length===0) throw new Error('Open-Meteo returned no forecast data for that location.');
+  const timeline = buildOpenMeteoTimeline(marine, wind);
+  if(timeline.length===0) throw new Error('Open-Meteo has no swell forecast for that location yet.');
 
   const targetTime = new Date(Date.now() + hourOffset*3600*1000).getTime();
   let targetIdx = 0, bestDiff = Infinity;
-  times.forEach((t,i)=>{
-    const diff = Math.abs(new Date(t).getTime() - targetTime);
+  timeline.forEach((pt,i)=>{
+    const diff = Math.abs(new Date(pt.time).getTime() - targetTime);
     if(diff<bestDiff){ bestDiff=diff; targetIdx=i; }
   });
 
-  const hM = marine.hourly.swell_wave_height[targetIdx];
-  const p = marine.hourly.swell_wave_period[targetIdx];
-  const d = marine.hourly.swell_wave_direction[targetIdx];
-  const ws = wind?.hourly?.windspeed_10m?.[targetIdx];
-  const wd = wind?.hourly?.winddirection_10m?.[targetIdx];
-
-  if(hM==null || p==null || d==null){
-    throw new Error('Open-Meteo has no swell forecast for that hour yet.');
-  }
-
-  // The ocean usually has more than one swell running at once — Open-Meteo's
-  // secondary partition, when present, is fed into scoring alongside the
-  // primary. Not every hour/location has a distinct second swell, so a
-  // missing value here just means "not registering," not a fetch failure.
-  const hM2 = marine.hourly.secondary_swell_wave_height?.[targetIdx];
-  const p2 = marine.hourly.secondary_swell_wave_period?.[targetIdx];
-  const d2 = marine.hourly.secondary_swell_wave_direction?.[targetIdx];
-  const hasSwell2 = hM2!=null && p2!=null && d2!=null && hM2>0;
-
-  return {
-    swellH: Math.round(hM*M_TO_FT*10)/10,
-    swellP: Math.round(p),
-    swellDir: Math.round(d),
-    swellH2: hasSwell2 ? Math.round(hM2*M_TO_FT*10)/10 : null,
-    swellP2: hasSwell2 ? Math.round(p2) : null,
-    swellDir2: hasSwell2 ? Math.round(d2) : null,
-    windS: ws==null ? null : Math.round(ws),
-    windDir: wd==null ? null : Math.round(wd),
-    time: times[targetIdx]
-  };
+  return Object.assign({}, timeline[targetIdx], { timeline });
 }
 
 // NOAA CO-OPS high/low tide extrema (feet, MLLW datum) — free, public, no API
@@ -272,38 +285,8 @@ async function fetchForecastTimeline(location, days, spots){
   if(!windRes.ok) throw new Error(`Open-Meteo wind request failed (HTTP ${windRes.status}).`);
   const marine = await marineRes.json();
   const wind = await windRes.json();
-  const times = marine?.hourly?.time;
-  if(!times || times.length===0) throw new Error('Open-Meteo returned no forecast data for that location.');
-
-  const windByTime = {};
-  (wind?.hourly?.time || []).forEach((t,i)=>{
-    windByTime[t] = { s: wind.hourly.windspeed_10m[i], d: wind.hourly.winddirection_10m[i] };
-  });
-
-  const timeline = times.map((t,i)=>{
-    const hM = marine.hourly.swell_wave_height[i];
-    const p = marine.hourly.swell_wave_period[i];
-    const d = marine.hourly.swell_wave_direction[i];
-    if(hM==null || p==null || d==null) return null;
-    const w = windByTime[t];
-    // Secondary swell partition — see fetchOpenMeteoForecast for why a
-    // missing/zero reading here just means no second swell that hour.
-    const hM2 = marine.hourly.secondary_swell_wave_height?.[i];
-    const p2 = marine.hourly.secondary_swell_wave_period?.[i];
-    const d2 = marine.hourly.secondary_swell_wave_direction?.[i];
-    const hasSwell2 = hM2!=null && p2!=null && d2!=null && hM2>0;
-    return {
-      time: t,
-      swellH: Math.round(hM*M_TO_FT*10)/10,
-      swellP: Math.round(p),
-      swellDir: Math.round(d),
-      swellH2: hasSwell2 ? Math.round(hM2*M_TO_FT*10)/10 : null,
-      swellP2: hasSwell2 ? Math.round(p2) : null,
-      swellDir2: hasSwell2 ? Math.round(d2) : null,
-      windS: w && w.s!=null ? Math.round(w.s) : null,
-      windDir: w && w.d!=null ? Math.round(w.d) : null
-    };
-  }).filter(Boolean);
+  const timeline = buildOpenMeteoTimeline(marine, wind);
+  if(timeline.length===0) throw new Error('Open-Meteo returned no forecast data for that location.');
 
   const allTimes = timeline.map(pt=>pt.time);
   const beginDateStr = allTimes[0].slice(0,10);
