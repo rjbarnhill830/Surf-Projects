@@ -95,11 +95,16 @@ async function fetchOpenMeteoForecast(lat, lon, hourOffset){
 // API key, US stations only. Returns [{time, ft, direction}], direction
 // derived by comparing each point to its neighbor since CO-OPS predictions
 // don't include it directly.
-async function fetchTidePredictions(stationId, days){
-  const fmt = d => `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-  const begin = new Date();
-  const end = new Date(Date.now() + days*86400000);
-  const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=surf_spot_predictor&begin_date=${fmt(begin)}&end_date=${fmt(end)}&datum=MLLW&station=${stationId}&time_zone=lst_ldt&units=english&interval=h&format=json`;
+// beginDateStr/endDateStr are "YYYY-MM-DD" in the forecast location's own
+// local time (i.e. taken straight from the swell timeline's own date
+// strings) — NOT computed from the browser's clock. A viewer whose browser
+// timezone sits ahead of the location's (anyone not physically in Pacific
+// time, or just a machine set to UTC) would otherwise get a tide window
+// shifted a day off from the actual swell/wind timeline, silently dropping
+// tide for part of the range.
+async function fetchTidePredictions(stationId, beginDateStr, endDateStr){
+  const toNoaaDate = s => s.replace(/-/g,'');
+  const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=surf_spot_predictor&begin_date=${toNoaaDate(beginDateStr)}&end_date=${toNoaaDate(endDateStr)}&datum=MLLW&station=${stationId}&time_zone=lst_ldt&units=english&interval=h&format=json`;
 
   let res;
   try{
@@ -203,7 +208,9 @@ async function fetchForecastTimeline(location, days){
   let tideError = null;
   if(location.tideStation){
     try{
-      const tidePoints = await fetchTidePredictions(location.tideStation, days);
+      const beginDateStr = times[0].slice(0,10);
+      const endDateStr = times[times.length-1].slice(0,10);
+      const tidePoints = await fetchTidePredictions(location.tideStation, beginDateStr, endDateStr);
       tidePoints.forEach(p=>{ tideByTime[p.time] = p; });
     }catch(e){
       tideError = e.message;
