@@ -235,8 +235,12 @@ function renderConfigCards(){
     const el = document.createElement('details');
     el.className='cfgcard';
     el.innerHTML=`
-      <summary>${def.name}${isEdited?'<span class="customized">edited</span>':''}${isExcluded?'<span class="customized" style="background:var(--low);">hidden</span>':''}<span class="chev">edit &#9662;</span></summary>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;margin-top:6px;">
+      <summary>${escapeHtml(cur.name)}${isEdited?'<span class="customized">edited</span>':''}${isExcluded?'<span class="customized" style="background:var(--low);">hidden</span>':''}<span class="chev">edit &#9662;</span></summary>
+      <div style="margin-top:10px;">
+        <label>Spot name</label>
+        <input type="text" id="cfg-name-${def.id}" value="${escapeHtml(cur.name)}">
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;margin-top:10px;">
         <input type="checkbox" class="include-toggle" data-id="${def.id}" style="width:auto;" ${isExcluded?'':'checked'}>
         Include this spot in recommendations
       </label>
@@ -332,17 +336,20 @@ function renderConfigCards(){
   box.querySelectorAll('.savecfg').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const id = btn.dataset.id;
+      const def = defaultSpots.find(d=>d.id===id);
       overrides[id] = Object.assign(
         {excluded: !!(overrides[id] && overrides[id].excluded)},
         readFieldsFromForm(id),
         {
-          blurb: document.getElementById('cfg-blurb-'+id).value.trim() || defaultSpots.find(d=>d.id===id).blurb,
+          name: document.getElementById('cfg-name-'+id).value.trim() || def.name,
+          blurb: document.getElementById('cfg-blurb-'+id).value.trim() || def.blurb,
           notes: document.getElementById('cfg-notes-'+id).value.trim()
         }
       );
       await persistOverrides();
       buildActiveSpots();
       renderConfigCards();
+      refreshLogSpotOptions();
       render();
       const msg = box.querySelector(`.cfgmsg[data-id="${id}"]`);
       if(msg){ msg.textContent='Saved.'; setTimeout(()=>msg.textContent='',2000); }
@@ -355,6 +362,7 @@ function renderConfigCards(){
       await persistOverrides();
       buildActiveSpots();
       renderConfigCards();
+      refreshLogSpotOptions();
       render();
     });
   });

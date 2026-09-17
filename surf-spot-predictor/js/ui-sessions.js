@@ -44,7 +44,9 @@ function renderSessions(){
 function refreshLogSpotOptions(){
   const sel = document.getElementById('logSpot');
   const prevValue = sel.value;
-  const all = defaultSpots.concat(customSpots);
+  // activeSpots (not defaultSpots) so a renamed built-in spot shows its
+  // edited name here too, not the original default.
+  const all = activeSpots;
   sel.innerHTML = '';
   all.forEach(s=>{
     const opt=document.createElement('option');
