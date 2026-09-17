@@ -150,21 +150,24 @@ function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, ti
   const minScore = minScoreEl ? (+minScoreEl.value || 0) : 0;
 
   // Best pick per spot across the full hourly resolution. Tide is looked up
-  // per spot's own station, not one shared curve for the whole region.
+  // per spot's own station, not one shared curve for the whole region. The
+  // matching timeline point is kept (not just its time) so the card can open
+  // the same swell/wind/tide breakdown panel as a grid-cell click.
   const bestPerSpot = {};
   timeline.forEach(pt=>{
     spotsToScore.forEach(spot=>{
       const conditions = Object.assign({waveStyles: userWaveStyles}, pt, tideForSpotAt(spot, pt.time, tideByStation, fallbackStationId));
       const r = scoreSpot(spot, conditions, sessionCache, userSkillLevel);
       if(!bestPerSpot[spot.id] || r.score > bestPerSpot[spot.id].score){
-        bestPerSpot[spot.id] = {spot, time:pt.time, score:r.score};
+        bestPerSpot[spot.id] = {spot, pt, score:r.score};
       }
     });
   });
   const bestPicks = Object.values(bestPerSpot).filter(p=>p.score>=minScore).sort((a,b)=>b.score-a.score).slice(0,5);
 
   const bestBox = document.createElement('div');
-  bestBox.innerHTML = '<h3 class="fc-heading">Best picks this window</h3>';
+  bestBox.innerHTML = '<h3 class="fc-heading">Best picks this window</h3>'
+    + (bestPicks.length ? '<p class="buoynote" style="margin:0 0 6px;">Click a pick for the full swell/wind/tide breakdown.</p>' : '');
   const list = document.createElement('div');
   list.className = 'results';
   if(bestPicks.length===0){
@@ -173,14 +176,16 @@ function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, ti
   bestPicks.forEach(pick=>{
     const div = document.createElement('div');
     div.className = 'card';
+    div.style.cursor = 'pointer';
     div.innerHTML = `
       <div class="body">
         <div class="name">${pick.spot.name}${pick.spot.bottomType&&pick.spot.bottomType!=='unknown'?`<span class="badge" style="background:var(--muted);">${BOTTOM_TYPE_LABELS[pick.spot.bottomType]}</span>`:''}${pick.spot.skillLevel?`<span class="badge" style="background:${skillBadgeColor(pick.spot.skillLevel)};">${SKILL_LEVEL_LABELS[pick.spot.skillLevel]}</span>`:''}</div>
         <div class="bar"><i style="width:${pick.score}%;background:${barColor(pick.score)}"></i></div>
-        <div class="note">${formatForecastTime(pick.time)}</div>
+        <div class="note">${formatForecastTime(pick.pt.time)}</div>
       </div>
       <div class="score" style="color:${barColor(pick.score)}">${pick.score}</div>
     `;
+    div.addEventListener('click', ()=>showPointDetail(pick.pt, pick.spot, tideByStation, fallbackStationId));
     list.appendChild(div);
   });
   bestBox.appendChild(list);
