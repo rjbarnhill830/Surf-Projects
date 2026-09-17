@@ -329,6 +329,7 @@ function initConditionsPanel(){
   initPreferencesPanel();
   initLocationPanel();
   initMapPicker();
+  initSpotsOverviewMap();
   initZonePicker();
   initSpreadsheetImport(async ()=>{ await loadSessions(); renderSessions(); render(); });
   render();

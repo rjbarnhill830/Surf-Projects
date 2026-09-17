@@ -10,6 +10,12 @@
 let spotsOverviewLeaflet = null;
 let spotsOverviewMarkers = [];
 
+// Whether the next click on empty map area should create a new custom spot
+// there. Off by default so idle panning/exploring the map never accidentally
+// creates a spot — armed only via the "Add a spot by clicking the map"
+// button (see setSpotsOverviewAddMode) and disarmed again right after use.
+let spotsOverviewAddMode = false;
+
 function ensureSpotsOverviewMapInitialized(){
   if(spotsOverviewLeaflet) return;
   if(typeof L === 'undefined'){
@@ -30,6 +36,53 @@ function ensureSpotsOverviewMapInitialized(){
     const btn = el && el.querySelector('.spot-map-jump');
     if(btn) btn.addEventListener('click', ()=>jumpToSpotCard(btn.dataset.id));
   });
+  // A click that lands on a marker never reaches here — markers have a
+  // bound popup, so Leaflet's own _onMouseClick stops that click from
+  // bubbling to the map (see Marker._onMouseClick's hasEventListeners
+  // check), meaning this only fires for genuine open-water/background
+  // clicks.
+  spotsOverviewLeaflet.on('click', e=>{
+    if(!spotsOverviewAddMode) return;
+    addCustomSpotAtLatLng(e.latlng.lat, e.latlng.lng);
+  });
+}
+
+function setSpotsOverviewAddMode(on){
+  spotsOverviewAddMode = on;
+  const btn = document.getElementById('addSpotByMapClick');
+  const note = document.getElementById('addSpotByMapNote');
+  if(btn) btn.textContent = on ? 'Cancel' : 'Add a spot by clicking the map…';
+  if(note) note.style.display = on ? '' : 'none';
+  if(spotsOverviewLeaflet) spotsOverviewLeaflet.getContainer().style.cursor = on ? 'crosshair' : '';
+}
+
+// Mirrors initAddCustomSpotButton() in ui-config.js (blank template, persist,
+// re-render, jump to and focus the new card) but seeds lat/lon from the
+// clicked point instead of leaving them blank.
+async function addCustomSpotAtLatLng(lat, lon){
+  setSpotsOverviewAddMode(false);
+  const spot = blankCustomSpot();
+  spot.lat = +lat.toFixed(4);
+  spot.lon = +lon.toFixed(4);
+  customSpots.push(spot);
+  await persistCustomSpots();
+  buildActiveSpots();
+  renderConfigCards();
+  refreshLogSpotOptions();
+  render();
+  const card = document.querySelector(`.cfgcard[data-id="${spot.id}"]`);
+  if(card){
+    card.open = true;
+    card.scrollIntoView({behavior:'smooth', block:'center'});
+    const nameInput = document.getElementById('cfg-name-'+spot.id);
+    if(nameInput){ nameInput.focus(); nameInput.select(); }
+  }
+}
+
+function initSpotsOverviewMap(){
+  const btn = document.getElementById('addSpotByMapClick');
+  if(!btn) return;
+  btn.addEventListener('click', ()=>setSpotsOverviewAddMode(!spotsOverviewAddMode));
 }
 
 function spotsOverviewPopupHtml(spot){
@@ -51,13 +104,16 @@ function spotsOverviewPopupHtml(spot){
 // currently in activeSpots.
 function renderSpotsOverviewMap(){
   const container = document.getElementById('spotsOverviewMap');
+  const addBtn = document.getElementById('addSpotByMapClick');
   if(!container) return;
   try{
     ensureSpotsOverviewMapInitialized();
   }catch(e){
     container.innerHTML = `<p class="empty" style="padding:20px;">${e.message}.</p>`;
+    if(addBtn) addBtn.style.display = 'none';
     return;
   }
+  if(addBtn) addBtn.style.display = '';
 
   spotsOverviewMarkers.forEach(m=>spotsOverviewLeaflet.removeLayer(m));
   spotsOverviewMarkers = [];
