@@ -14,94 +14,120 @@
 // spot-to-spot along a coastline, so one shared buoy-area reference isn't
 // precise enough. See the norcalForecastLocations comment for which
 // stations are verified and why.
+// lat/lon are used for the north-to-south sort and the "closest to me"
+// distance filter in the Ranked spots section (see distanceMiles() in
+// scoring.js) — verified against public sources (state park pages,
+// Wikipedia, surf-guide sites) for named spots. The four spots marked
+// "approximate" in their own comment are the user's personal/informal
+// names for local reef breaks with no public spot data to verify against;
+// they're placed at Rockaway Beach, the nearest named spot in their own
+// blurb, and should be corrected if the user has better coordinates.
 const norcalSpots = [
   {
     id:"salmon-creek", name:"Salmon Creek Beach", bottomType:"beach", skillLevel:"intermediate", waveStyle:["powerful","hollow"],
+    lat:38.3516, lon:-123.0609,
     dirMin:209, dirMax:285, facing:250, exposure:"open", minH:3, maxH:10, windDir:112, windTol:45, maxWind:16, tideMin:1.5, tideMax:7, minPeriod:6, maxPeriod:13, tideDirection:"outgoing", tideStation:"9415020",
     blurb:"Wide, powerful, exposed beach break. Best WSW swell, offshore ESE wind, mid-to-high tide falling."
   },
   {
     id:"doran", name:"Bodega Head / Doran Beach", bottomType:"beach", skillLevel:"beginner", waveStyle:["playful"],
+    lat:38.3135, lon:-123.0397,
     dirMin:190, dirMax:260, facing:180, exposure:"sheltered", minH:2, maxH:6, windDir:0, windTol:50, maxWind:18, tideMin:-2, tideMax:7, minPeriod:6, maxPeriod:13, tideStation:"9415020",
     blurb:"Sheltered, south-facing, forgiving. Best SW swell, offshore N wind. Works most tides, easiest for beginners."
   },
   {
     id:"dillon", name:"Dillon Beach", bottomType:"beach", skillLevel:"intermediate", waveStyle:["peaky"],
+    lat:38.2508, lon:-122.9653,
     dirMin:254, dirMax:330, facing:280, exposure:"moderate", minH:3, maxH:8, windDir:90, windTol:40, maxWind:15, tideMin:1.5, tideMax:7, minPeriod:6, maxPeriod:13, tideStation:"9415020",
     blurb:"Shifty sandbars, remote. Best NW-W swell, offshore E wind, mid-to-high tide."
   },
   {
     id:"stinson", name:"Stinson Beach", bottomType:"beach", skillLevel:"beginner", waveStyle:["playful"],
+    lat:37.9006, lon:-122.6444,
     dirMin:193, dirMax:257, facing:215, exposure:"moderate", minH:1, maxH:6, windDir:45, windTol:42, maxWind:14, tideMin:-2, tideMax:7, minPeriod:6, maxPeriod:13, tideStation:"9414958",
     blurb:"Mellow, powerless, beginner-friendly. Best SW swell, offshore NE wind, works on all tide stages."
   },
   {
     id:"pacifica", name:"Pacifica / Linda Mar", bottomType:"beach", skillLevel:"beginner", waveStyle:["playful","peaky"],
+    lat:37.6011, lon:-122.4992,
     dirMin:252, dirMax:332, facing:270, exposure:"moderate", minH:1, maxH:8, windDir:135, windTol:50, maxWind:22, tideMin:1.5, tideMax:7, minPeriod:6, maxPeriod:13, tideDirection:"incoming", tideStation:"9414275",
     blurb:"Valley funnels S/SE wind offshore even when the coast is blown out. Best NW swell, incoming mid-to-high tide."
   },
   {
     id:"oceanbeach", name:"Ocean Beach SF", bottomType:"beach", skillLevel:"advanced", waveStyle:["powerful","hollow"],
+    lat:37.7594, lon:-122.5108,
     dirMin:235, dirMax:305, facing:270, exposure:"open", minH:4, maxH:18, windDir:90, windTol:35, maxWind:14, tideMin:-2, tideMax:4, minPeriod:9, maxPeriod:20, tideStation:"9414275",
     blurb:"Big, powerful, tide-dominated. Takes almost any swell direction. Best offshore E wind, low-to-mid tide. Advanced. Includes Noriega, Taraval, Vicente, Judah, Moraga, Kelly's Cove and the numbered stairs. Beach break, but exposed and deep enough that &mdash; unlike most beach breaks &mdash; it actually wants a longer-period, more organized swell to get properly good."
   },
   {
     id:"rockaway", name:"Rockaway Beach (Pacifica)", bottomType:"combo", skillLevel:"intermediate", waveStyle:["powerful","hollow"],
+    lat:37.6102, lon:-122.4963,
     dirMin:275, dirMax:355, facing:300, exposure:"moderate", minH:3, maxH:12, windDir:90, windTol:45, maxWind:18, tideMin:-2, tideMax:4, minPeriod:6, maxPeriod:22, tideStation:"9414275",
     blurb:"Rocky cove with a deep channel at the north end &mdash; separate spot from Linda Mar and from SF's Ocean Beach. Best NW swell, low tide, channel lets you paddle out even when it's big."
   },
   {
     id:"waddell", name:"Waddell Creek", bottomType:"combo", skillLevel:"intermediate", waveStyle:["peaky","playful"],
+    lat:37.0925, lon:-122.2767,
     dirMin:205, dirMax:289, facing:255, exposure:"open", minH:2, maxH:12, windDir:45, windTol:45, maxWind:18, tideMin:1.5, tideMax:7, minPeriod:6, maxPeriod:22, tideDirection:"incoming", tideStation:"9414131",
     blurb:"Reef, beach break and rivermouth combo near Davenport. Best SW-W swell, offshore NE wind, incoming-to-high tide. Handles almost anything."
   },
   {
     id:"cronkite", name:"Fort Cronkite / Rodeo Beach", bottomType:"beach", skillLevel:"intermediate", waveStyle:["playful","peaky"],
+    lat:37.8300, lon:-122.5358,
     dirMin:260, dirMax:10, facing:300, exposure:"sheltered", minH:2, maxH:8, windDir:45, windTol:45, maxWind:15, tideMin:-2, tideMax:4, minPeriod:6, maxPeriod:13, tideStation:"9414275",
     blurb:"Sheltered Marin Headlands cove, notoriously hard to predict. Takes S, N or W swell, offshore NE wind, low tide."
   },
   {
     id:"davenport", name:"Davenport Left", bottomType:"reef", skillLevel:"advanced", waveStyle:["powerful","hollow"],
+    lat:37.0181, lon:-122.1972,
     dirMin:212, dirMax:308, facing:260, exposure:"open", minH:3, maxH:10, windDir:45, windTol:40, maxWind:15, tideMin:-2, tideMax:4, minPeriod:10, maxPeriod:22, tideStation:"9414131",
     blurb:"Left reef north of Santa Cruz. Best SW-NW swell, offshore NE wind, low-to-mid tide."
   },
   {
     id:"palomarin", name:"Palomarin / Bolinas", bottomType:"point", skillLevel:"advanced", waveStyle:["playful","peaky"],
+    lat:37.9302, lon:-122.7453,
     dirMin:181, dirMax:251, facing:200, exposure:"sheltered", minH:1, maxH:6, windDir:0, windTol:50, maxWind:15, tideMin:-2, tideMax:4, minPeriod:9, maxPeriod:22, tideStation:"9414958",
     blurb:"Marin coast reef/point near Bolinas. Best SW swell, light wind, low-to-mid tide. Notoriously localized."
   },
   {
     id:"rosscove", name:"Ross's Cove", bottomType:"reef", skillLevel:"advanced", waveStyle:["powerful","hollow"],
+    lat:37.6102, lon:-122.4963, // approximate — personal/informal name, no public spot data; placed at Rockaway (its described nearest named spot)
     dirMin:248, dirMax:318, facing:295, exposure:"moderate", minH:3, maxH:10, windDir:100, windTol:45, maxWind:16, tideMin:1.5, tideMax:7, minPeriod:10, maxPeriod:22, tideStation:"9414275",
     blurb:"No published guide found &mdash; profile built entirely from your own sessions. West-facing, seems to like WNW swell and light offshore wind."
   },
   {
     id:"gazebos", name:"Gazebos, South Left", bottomType:"reef", skillLevel:"advanced", waveStyle:["hollow","playful"],
+    lat:37.6102, lon:-122.4963, // approximate — personal/informal name, no public spot data; placed at Rockaway (its described nearest named spot)
     dirMin:263, dirMax:333, facing:298, exposure:"moderate", minH:3, maxH:10, windDir:100, windTol:45, maxWind:14, tideMin:1.5, tideMax:7, minPeriod:10, maxPeriod:22, tideStation:"9414275",
     blurb:"No published guide found &mdash; based on your sessions, appears to be a Pacifica-area peak with exposure similar to Rockaway."
   },
   {
     id:"crease", name:"Crease", bottomType:"reef", skillLevel:"advanced", waveStyle:["powerful","peaky"],
+    lat:37.6102, lon:-122.4963, // approximate — personal/informal name, no public spot data; placed at Rockaway (its described nearest named spot)
     dirMin:248, dirMax:318, facing:295, exposure:"moderate", minH:3, maxH:10, windDir:100, windTol:45, maxWind:16, tideMin:1.5, tideMax:7, minPeriod:10, maxPeriod:22, tideStation:"9414275",
     blurb:"No published guide found &mdash; only 2 logged sessions so far, both alongside Ross's Cove trips. Treat this profile as provisional."
   },
   {
     id:"deadmans", name:"Deadman's", bottomType:"reef", skillLevel:"advanced", waveStyle:["powerful","peaky"],
+    lat:37.6102, lon:-122.4963, // approximate — personal/informal name, no public spot data; placed at Rockaway (its described nearest named spot)
     dirMin:262, dirMax:332, facing:297, exposure:"moderate", minH:3, maxH:10, windDir:100, windTol:45, maxWind:14, tideMin:1.5, tideMax:7, minPeriod:10, maxPeriod:22, tideStation:"9414275",
     blurb:"No published guide found &mdash; only 1 session had usable conditions data. Your notes mention needing more size to clear the rocks."
   },
   {
     id:"montara", name:"Montara State Beach", bottomType:"beach", skillLevel:"intermediate", waveStyle:["peaky","playful"],
+    lat:37.5481, lon:-122.5136,
     dirMin:254, dirMax:330, facing:275, exposure:"open", minH:3, maxH:10, windDir:90, windTol:42, maxWind:16, tideMin:-2, tideMax:4, minPeriod:6, maxPeriod:13, tideStation:"9414131",
     blurb:"Exposed San Mateo beach break, faces the open Pacific. Best WNW-NW swell, offshore E wind, low-to-mid tide. Your one logged session had no conditions recorded, so nothing imported yet."
   },
   {
     id:"sangregorio", name:"San Gregorio State Beach", bottomType:"beach", skillLevel:"intermediate", waveStyle:["playful","peaky"],
+    lat:37.3231, lon:-122.4019,
     dirMin:190, dirMax:260, facing:265, exposure:"moderate", minH:2, maxH:8, windDir:90, windTol:42, maxWind:15, tideMin:1.5, tideMax:4, minPeriod:6, maxPeriod:13, tideStation:"9414131",
     blurb:"San Mateo coast beach break. Best SW swell, offshore E wind, mid tide. Your one logged session had no conditions recorded, so nothing imported yet."
   },
   {
     id:"tunitas", name:"Tunitas Creek", bottomType:"beach", skillLevel:"intermediate", waveStyle:["peaky","playful"],
+    lat:37.3566, lon:-122.3997,
     dirMin:228, dirMax:312, facing:270, exposure:"moderate", minH:3, maxH:10, windDir:68, windTol:40, maxWind:14, tideMin:-2, tideMax:7, minPeriod:6, maxPeriod:13, tideStation:"9414131",
     blurb:"San Mateo coast sand-bottom A-frames, inconsistent but rewarding. Best W-NW-SW swell, offshore NE-ESE wind, works most tides. Your one logged session had no conditions recorded, so nothing imported yet."
   }

@@ -70,6 +70,8 @@ async function switchZone(zoneId){
   await loadCustomSpots();
   await loadOverrides();
   await loadSessions();
+  await loadHomeLocation();
+  refreshLocationPanelInputs();
 
   renderConfigCards();
   renderSessions();
@@ -84,7 +86,9 @@ async function switchZone(zoneId){
 
 function toggleNorcalOnlySections(){
   const isNorcal = currentZoneId === 'norcal';
-  ['spreadsheetSection','importSection'].forEach(id=>{
+  // Distance/geo sort needs every spot to have lat/lon, which only the
+  // NorCal spot list carries — the Portugal demo zone's spots don't.
+  ['spreadsheetSection','importSection','geoFilterPanel'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.style.display = isNorcal ? '' : 'none';
   });

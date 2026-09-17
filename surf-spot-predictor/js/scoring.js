@@ -1,6 +1,29 @@
 function angDiff(a,b){let d=Math.abs(a-b)%360;return d>180?360-d:d;}
 function round(n){return Math.round(n);}
 
+// Straight-line ("as the crow flies") distance in miles, via the haversine
+// formula — not a routed driving distance (that would need a routing API),
+// but a reasonable proxy along a coastline where the highway roughly
+// follows the shore.
+const EARTH_RADIUS_MILES = 3958.8;
+function distanceMiles(lat1, lon1, lat2, lon2){
+  const rad = Math.PI/180;
+  const dLat = (lat2-lat1)*rad, dLon = (lon2-lon1)*rad;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*rad)*Math.cos(lat2*rad)*Math.sin(dLon/2)**2;
+  return EARTH_RADIUS_MILES * 2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// Initial compass bearing (0-360, 0=north) from point 1 to point 2 — fed
+// through dirLabel() below to show "N"/"SW"/etc. for which direction a spot
+// sits from the user's chosen home location.
+function bearingDegrees(lat1, lon1, lat2, lon2){
+  const rad = Math.PI/180, toDeg = 180/Math.PI;
+  const dLon = (lon2-lon1)*rad;
+  const y = Math.sin(dLon)*Math.cos(lat2*rad);
+  const x = Math.cos(lat1*rad)*Math.sin(lat2*rad) - Math.sin(lat1*rad)*Math.cos(lat2*rad)*Math.cos(dLon);
+  return (Math.atan2(y,x)*toDeg + 360) % 360;
+}
+
 // A spot's swell window is a continuous arc [min,max] that may cross the
 // 0/360 boundary (e.g. a window spanning NNW through NNE wraps through
 // north). angleInWindow/angleDistanceToWindow both account for that.

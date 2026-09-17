@@ -19,15 +19,46 @@ function render(){
   document.getElementById('windSOut').textContent=c.windS+' mph';
   document.getElementById('tideFtOut').textContent=c.tideFt.toFixed(1)+' ft ('+(tideFtToCategory(c.tideFt).charAt(0).toUpperCase()+tideFtToCategory(c.tideFt).slice(1))+')';
 
-  const ranked = activeSpots.filter(spot=>!spot.excluded).map(spot=>{
-    return Object.assign({spot}, scoreSpot(spot, c, sessionCache, userSkillLevel));
-  }).sort((a,b)=>b.score-a.score);
+  // Distance/bearing are only computable when a home location is set AND
+  // the spot itself has coordinates (custom spots added without lat/lon
+  // won't) — null in either case rather than a misleading number.
+  const hasHome = userHomeLat!=null && userHomeLon!=null;
+  let ranked = activeSpots.filter(spot=>!spot.excluded).map(spot=>{
+    const hasSpotLoc = spot.lat!=null && spot.lon!=null;
+    const distanceMi = (hasHome && hasSpotLoc) ? distanceMiles(userHomeLat, userHomeLon, spot.lat, spot.lon) : null;
+    const bearing = distanceMi!=null ? bearingDegrees(userHomeLat, userHomeLon, spot.lat, spot.lon) : null;
+    return Object.assign({spot, distanceMi, bearing}, scoreSpot(spot, c, sessionCache, userSkillLevel));
+  });
+
+  const sortMode = document.getElementById('sortMode') ? document.getElementById('sortMode').value : 'score';
+  const maxDistanceRaw = document.getElementById('maxDistance') ? document.getElementById('maxDistance').value : '';
+  const maxDistance = maxDistanceRaw!=='' ? +maxDistanceRaw : null;
+  // Only spots we could actually confirm are within range stay — a spot
+  // with no coordinates to check is excluded rather than assumed close,
+  // since "narrow down" should mean the remaining list is trustworthy.
+  const distanceFilterActive = hasHome && maxDistance!=null && maxDistance>0;
+  const totalBeforeDistanceFilter = ranked.length;
+  if(distanceFilterActive){
+    ranked = ranked.filter(r=>r.distanceMi!=null && r.distanceMi<=maxDistance);
+  }
+  const excludedByDistance = totalBeforeDistanceFilter - ranked.length;
+
+  if(sortMode==='northsouth'){
+    ranked.sort((a,b)=>(b.spot.lat ?? -999)-(a.spot.lat ?? -999));
+  }else if(sortMode==='distance'){
+    ranked.sort((a,b)=>(a.distanceMi ?? Infinity)-(b.distanceMi ?? Infinity));
+  }else{
+    ranked.sort((a,b)=>b.score-a.score);
+  }
 
   const hiddenCount = activeSpots.filter(s=>s.excluded).length;
   const hiddenNote = document.getElementById('hiddenNote');
   if(hiddenNote){
-    hiddenNote.textContent = hiddenCount>0
-      ? `Showing ${ranked.length} of ${activeSpots.length} spots — ${hiddenCount} hidden from recommendations (edit a spot below to bring it back).`
+    const reasons = [];
+    if(hiddenCount>0) reasons.push(`${hiddenCount} hidden from recommendations (edit a spot below to bring it back)`);
+    if(excludedByDistance>0) reasons.push(`${excludedByDistance} beyond ${maxDistance}mi or missing location data`);
+    hiddenNote.textContent = reasons.length
+      ? `Showing ${ranked.length} of ${activeSpots.length} spots — ${reasons.join('; ')}.`
       : '';
   }
 
@@ -40,6 +71,7 @@ function render(){
       <div class="rank">${i+1}</div>
       <div class="body">
         <div class="name">${r.spot.name}${r.spot.bottomType&&r.spot.bottomType!=='unknown'?`<span class="badge" style="background:var(--muted);">${BOTTOM_TYPE_LABELS[r.spot.bottomType]}</span>`:''}${r.spot.skillLevel?`<span class="badge" style="background:${skillBadgeColor(r.spot.skillLevel)};">${SKILL_LEVEL_LABELS[r.spot.skillLevel]}</span>`:''}${r.tag?`<span class="badge">${r.tag} rated sessions</span>`:''}</div>
+        ${r.distanceMi!=null ? `<div class="note">${Math.round(r.distanceMi)} mi ${dirLabel(r.bearing)} of you (straight-line)</div>` : ''}
         <div class="bar"><i style="width:${r.score}%;background:${barColor(r.score)}"></i></div>
         <div class="note">${r.spot.blurb}</div>
         ${r.spot.notes ? `<div class="note" style="font-style:italic;margin-top:3px;">${r.spot.notes}</div>` : ''}
@@ -286,6 +318,7 @@ function initConditionsPanel(){
   await loadCustomSpots();
   await loadOverrides();
   await loadSessions();
+  await loadHomeLocation();
   renderConfigCards();
   renderSessions();
   initConditionsPanel();
@@ -294,6 +327,7 @@ function initConditionsPanel(){
   initAddCustomSpotButton();
   initForecastSection();
   initPreferencesPanel();
+  initLocationPanel();
   initZonePicker();
   initSpreadsheetImport(async ()=>{ await loadSessions(); renderSessions(); render(); });
   render();
