@@ -93,35 +93,98 @@ function renderForecastCompare(locId){
   box.innerHTML = `<div class="sessions" style="margin-top:12px;">${rows.join('')}</div>`;
 }
 
+// Builds the tooltip body for one hourly point, shared by both charts —
+// every series at that hour, value-first (bold) then label (muted), each
+// keyed with a short line swatch instead of color-only identification.
+// hasSwell2 reflects the whole timeline (matching the chart's legend/line
+// labels), not just this one point — an hour with no secondary reading of
+// its own still says "Swell 1" rather than flip-flopping the label
+// depending on which hour happens to be hovered.
+function trendTooltipHtml(pt, hasSwell2){
+  const rows = [
+    `<div class="tt-row"><i style="background:${CHART_SWELL1_COLOR}"></i><span class="tt-val">${pt.swellH}ft @ ${pt.swellP}s ${dirLabel(pt.swellDir)}</span><span class="tt-label">${hasSwell2?'Swell 1':'Swell'}</span></div>`
+  ];
+  if(hasSwell2){
+    const swell2Val = pt.swellH2!=null ? `${pt.swellH2}ft @ ${pt.swellP2}s ${dirLabel(pt.swellDir2)}` : 'not available';
+    rows.push(`<div class="tt-row"><i style="background:${CHART_SWELL2_COLOR}"></i><span class="tt-val">${swell2Val}</span><span class="tt-label">Swell 2</span></div>`);
+  }
+  rows.push(`<div class="tt-row"><i style="background:${CHART_WIND_COLOR}"></i><span class="tt-val">${pt.windS!=null?pt.windS+'mph '+dirLabel(pt.windDir):'not available'}</span><span class="tt-label">Wind</span></div>`);
+  return `<div class="tt-time">${formatForecastTime(pt.time)}</div>${rows.join('')}`;
+}
+
 // Shows the full hourly swell/wind trend from an Open-Meteo "Load forecast"
-// fetch (not just the single reading closest to the requested hour), so you
-// can see how conditions build toward — or fall away from — that hour
-// rather than only getting a single snapshot. Reuses the same
-// forecast-grid/fc-scroll styling as the week-ahead Forecast section for a
-// consistent look. formatForecastTime/dayStartFlags/scrollHintHtml come from
-// js/ui-forecast.js, loaded earlier on the page.
+// fetch (not just the single reading closest to the requested hour) as line
+// charts, so you can see how conditions build toward — or fall away from —
+// that hour rather than only getting a single snapshot. A collapsed table
+// underneath keeps every value reachable without hovering (screen readers,
+// print, or just preferring a table). formatForecastTime/dayStartFlags come
+// from js/ui-forecast.js; buildLineChart from js/charts.js — both load
+// earlier on the page.
 function renderOpenMeteoTrend(timeline, targetTime){
   const box = document.getElementById('openMeteoTrend');
   if(!timeline || timeline.length===0){ box.innerHTML=''; return; }
+  box.innerHTML = '';
+
   const hasSwell2 = timeline.some(p=>p.swellH2!=null);
   const dayStarts = dayStartFlags(timeline);
   const targetIdx = timeline.findIndex(p=>p.time===targetTime);
+  const times = timeline.map(p=>p.time);
+
+  const heading = document.createElement('h3');
+  heading.className = 'fc-heading';
+  heading.style.marginTop = '18px';
+  heading.textContent = 'Hourly trend';
+  box.appendChild(heading);
+  if(dayStarts.filter(Boolean).length>1){
+    const hint = document.createElement('p');
+    hint.className = 'buoynote';
+    hint.style.margin = '0 0 6px';
+    hint.textContent = 'Scroll to see all days → the dashed line marks the hour loaded into the sliders above.';
+    box.appendChild(hint);
+  }
+
+  const swellSeries = [{
+    label: hasSwell2 ? 'Swell 1' : 'Swell', color: CHART_SWELL1_COLOR,
+    values: timeline.map(p=>p.swellH)
+  }];
+  if(hasSwell2){
+    swellSeries.push({ label:'Swell 2', color: CHART_SWELL2_COLOR, values: timeline.map(p=>p.swellH2) });
+  }
+  box.appendChild(buildLineChart({
+    title: 'Swell height', unit: 'ft', series: swellSeries, times, dayStarts, targetIdx,
+    detailFor: i => trendTooltipHtml(timeline[i], hasSwell2)
+  }));
+
+  box.appendChild(buildLineChart({
+    title: 'Wind speed', unit: 'mph',
+    series: [{ label:'Wind', color: CHART_WIND_COLOR, values: timeline.map(p=>p.windS) }],
+    times, dayStarts, targetIdx,
+    detailFor: i => trendTooltipHtml(timeline[i], hasSwell2)
+  }));
+
+  const details = document.createElement('details');
+  details.style.marginTop = '14px';
+  const summary = document.createElement('summary');
+  summary.className = 'buoynote';
+  summary.style.cursor = 'pointer';
+  summary.textContent = 'View as table';
+  details.appendChild(summary);
   const cellCls = i => `${dayStarts[i]?' day-start':''}${i===targetIdx?' trend-target':''}`;
   const headerCells = timeline.map((p,i)=>`<th class="${cellCls(i)}">${formatForecastTime(p.time)}</th>`).join('');
   const swellRow = `<tr><td class="sticky-col">${hasSwell2?'Swell 1':'Swell'}</td>${timeline.map((p,i)=>`<td class="${cellCls(i)}">${p.swellH}ft @ ${p.swellP}s ${dirLabel(p.swellDir)}</td>`).join('')}</tr>`;
   const swell2Row = hasSwell2 ? `<tr><td class="sticky-col">Swell 2</td>${timeline.map((p,i)=>`<td class="${cellCls(i)}">${p.swellH2!=null?`${p.swellH2}ft @ ${p.swellP2}s ${dirLabel(p.swellDir2)}`:'–'}</td>`).join('')}</tr>` : '';
   const windRow = `<tr><td class="sticky-col">Wind</td>${timeline.map((p,i)=>`<td class="${cellCls(i)}">${p.windS!=null?p.windS+'mph '+dirLabel(p.windDir):'–'}</td>`).join('')}</tr>`;
-  box.innerHTML = `
-    <h3 class="fc-heading" style="margin-top:18px;">Hourly trend</h3>
-    ${scrollHintHtml(timeline)}
-    <p class="buoynote" style="margin:0 0 6px;">Highlighted column is the hour loaded into the sliders above.</p>
-    <div class="fc-scroll">
-      <table class="forecast-grid">
-        <thead><tr><th class="sticky-col"></th>${headerCells}</tr></thead>
-        <tbody>${swellRow}${swell2Row}${windRow}</tbody>
-      </table>
-    </div>
+  const tableWrap = document.createElement('div');
+  tableWrap.className = 'fc-scroll';
+  tableWrap.style.marginTop = '8px';
+  tableWrap.innerHTML = `
+    <table class="forecast-grid">
+      <thead><tr><th class="sticky-col"></th>${headerCells}</tr></thead>
+      <tbody>${swellRow}${swell2Row}${windRow}</tbody>
+    </table>
   `;
+  details.appendChild(tableWrap);
+  box.appendChild(details);
 }
 
 function refreshForecastLocationOptions(){
