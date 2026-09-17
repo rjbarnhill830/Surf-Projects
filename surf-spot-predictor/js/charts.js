@@ -195,6 +195,19 @@ function buildLineChart({title, unit, series, times, dayStarts, targetIdx, detai
   });
   hitRect.addEventListener('pointerleave', hide);
 
+  // Every render starts scrolled to the left edge (hour 0), so a target
+  // hour far into the window — the whole point of loading a new offset —
+  // can land completely off-screen with nothing visibly different from the
+  // last render. Center the scroll on it once the chart has real layout to
+  // measure against (deferred a frame so clientWidth isn't still 0 from not
+  // being attached to the document yet).
+  if(targetIdx>=0 && targetIdx<n){
+    requestAnimationFrame(()=>{
+      const targetX = x(targetIdx);
+      scrollBox.scrollLeft = Math.max(0, targetX - scrollBox.clientWidth/2);
+    });
+  }
+
   scrollBox.appendChild(svg);
   wrap.appendChild(scrollBox);
   wrap.appendChild(tooltip);
