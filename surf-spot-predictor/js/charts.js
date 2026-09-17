@@ -66,7 +66,12 @@ function chartWeekdayLabel(iso){
 function buildLineChart({title, unit, series, times, dayStarts, targetIdx, detailFor}){
   const n = times.length;
   const stepPx = 16;
-  const pad = {top: 28, right: 18, bottom: 22, left: 34};
+  // pad.left is now just a small inset within the scrollable plot SVG — the
+  // Y-axis itself lives in a separate, unscrolled axisSvg beside it (see
+  // below), so its tick labels stay visible while the plot scrolls
+  // horizontally instead of disappearing off the left edge with hour 0.
+  const pad = {top: 28, right: 18, bottom: 22, left: 10};
+  const axisWidth = 34;
   const plotH = 120;
   const plotW = Math.max(stepPx*(n-1), 40);
   const totalW = pad.left + plotW + pad.right;
@@ -104,17 +109,26 @@ function buildLineChart({title, unit, series, times, dayStarts, targetIdx, detai
   }
   wrap.appendChild(headerRow);
 
+  // A separate, un-scrolled SVG for the Y-axis labels, sized and vertically
+  // aligned identically to the scrollable plot (same pad.top/plotH/yMax) so
+  // its ticks line up with the plot's gridlines despite living outside the
+  // scroll container — the whole point being the range values stay visible
+  // no matter how far the chart is scrolled horizontally.
+  const axisSvg = svgEl('svg', {width:axisWidth, height:totalH, class:'chart-axis-svg'});
+  for(let v=0; v<=yMax+0.0001; v+=yStep){
+    const label = svgEl('text', {x:axisWidth-6, y:y(v)+3, class:'chart-axis-label', 'text-anchor':'end'});
+    label.textContent = Math.round(v*10)/10;
+    axisSvg.appendChild(label);
+  }
+
   const scrollBox = document.createElement('div');
   scrollBox.className = 'fc-scroll chart-scroll';
   const svg = svgEl('svg', {viewBox:`0 0 ${totalW} ${totalH}`, width:totalW, height:totalH, class:'chart-svg'});
 
-  // Horizontal gridlines + Y ticks (0 and each nice step up to yMax).
+  // Horizontal gridlines (0 and each nice step up to yMax) — labels for
+  // these live in axisSvg instead, so they aren't duplicated here.
   for(let v=0; v<=yMax+0.0001; v+=yStep){
-    const gy = y(v);
-    svg.appendChild(svgEl('line', {x1:pad.left, x2:pad.left+plotW, y1:gy, y2:gy, class:'chart-gridline'}));
-    const label = svgEl('text', {x:pad.left-6, y:gy+3, class:'chart-axis-label', 'text-anchor':'end'});
-    label.textContent = Math.round(v*10)/10;
-    svg.appendChild(label);
+    svg.appendChild(svgEl('line', {x1:pad.left, x2:pad.left+plotW, y1:y(v), y2:y(v), class:'chart-gridline'}));
   }
 
   // Vertical day-boundary gridlines + weekday ticks.
@@ -209,7 +223,11 @@ function buildLineChart({title, unit, series, times, dayStarts, targetIdx, detai
   }
 
   scrollBox.appendChild(svg);
-  wrap.appendChild(scrollBox);
+  const chartRow = document.createElement('div');
+  chartRow.className = 'chart-row';
+  chartRow.appendChild(axisSvg);
+  chartRow.appendChild(scrollBox);
+  wrap.appendChild(chartRow);
   wrap.appendChild(tooltip);
   return wrap;
 }
