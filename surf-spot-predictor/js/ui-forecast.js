@@ -115,7 +115,14 @@ function pointDetailHtml(pt, spot, tideByStation, fallbackStationId){
   `;
 }
 
-function showPointDetail(pt, spot, tideByStation, fallbackStationId){
+// anchorEl, when given, places the panel immediately after that element (a
+// clicked best-pick card, so the breakdown appears right where you clicked
+// instead of scrolling down to the bottom of the whole Forecast section).
+// Without one (a grid-cell click, where there's no sensible place to splice
+// a wide panel into a table row) it falls back to the end of the results.
+// Re-showing an existing panel simply moves it, since a DOM node can only
+// live in one place at a time.
+function showPointDetail(pt, spot, tideByStation, fallbackStationId, anchorEl){
   const resultsEl = document.getElementById('forecastResults');
   let panel = document.getElementById('fcPointDetail');
   if(!panel){
@@ -123,9 +130,13 @@ function showPointDetail(pt, spot, tideByStation, fallbackStationId){
     panel.id = 'fcPointDetail';
     panel.className = 'panel';
     panel.style.marginTop = '14px';
-    resultsEl.appendChild(panel);
   }
   panel.innerHTML = pointDetailHtml(pt, spot, tideByStation, fallbackStationId);
+  if(anchorEl && anchorEl.parentNode){
+    anchorEl.insertAdjacentElement('afterend', panel);
+  }else{
+    resultsEl.appendChild(panel);
+  }
   document.getElementById('fcPointDetailClose').addEventListener('click', ()=>panel.remove());
   panel.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
@@ -185,7 +196,7 @@ function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, ti
       </div>
       <div class="score" style="color:${barColor(pick.score)}">${pick.score}</div>
     `;
-    div.addEventListener('click', ()=>showPointDetail(pick.pt, pick.spot, tideByStation, fallbackStationId));
+    div.addEventListener('click', ()=>showPointDetail(pick.pt, pick.spot, tideByStation, fallbackStationId, div));
     list.appendChild(div);
   });
   bestBox.appendChild(list);
