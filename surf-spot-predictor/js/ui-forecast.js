@@ -77,6 +77,53 @@ function resetForecastSection(){
   document.getElementById('forecastResults').innerHTML = '';
 }
 
+// Populated fresh by renderForecastResults() and read by the delegated click
+// handler in initForecastSection() — module-level so the handler (attached
+// once) always sees whatever was most recently rendered, without needing to
+// re-attach listeners (and risk piling them up) on every "Get forecast" run.
+let fcCurrentSampledPoints = [];
+let fcCurrentOrderedSpots = [];
+
+function pointDetailHtml(pt, spot){
+  const tideText = pt.tideFt!=null ? `${pt.tideFt}ft (${pt.tideDir||'unknown direction'})` : 'not available';
+  let scoreSection = '';
+  if(spot){
+    const r = scoreSpot(spot, Object.assign({waveStyles: userWaveStyles}, pt), sessionCache, userSkillLevel);
+    scoreSection = `
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);">
+        <b>${spot.name}</b> &mdash; <span style="color:${barColor(r.score)};font-weight:700;">${r.score}</span>
+        ${r.transmission!==1 ? `<div class="note">${pt.swellH}ft offshore &rarr; ~${r.localH}ft here (&times;${r.transmission})</div>` : ''}
+        ${r.outOfRange.length ? `<div class="note" style="color:var(--mid);">Outside ideal range &mdash; ${r.outOfRange.join(', ')}.</div>` : ''}
+      </div>
+    `;
+  }
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+      <b>${formatForecastTime(pt.time)}</b>
+      <button type="button" id="fcPointDetailClose" style="padding:2px 9px;">&times;</button>
+    </div>
+    <div class="note" style="margin-top:6px;">Swell: ${pt.swellH}ft @ ${pt.swellP}s ${dirLabel(pt.swellDir)}</div>
+    <div class="note">Wind: ${pt.windS!=null?pt.windS+'mph '+dirLabel(pt.windDir):'not available'}</div>
+    <div class="note">Tide: ${tideText}</div>
+    ${scoreSection}
+  `;
+}
+
+function showPointDetail(pt, spot){
+  const resultsEl = document.getElementById('forecastResults');
+  let panel = document.getElementById('fcPointDetail');
+  if(!panel){
+    panel = document.createElement('div');
+    panel.id = 'fcPointDetail';
+    panel.className = 'panel';
+    panel.style.marginTop = '14px';
+    resultsEl.appendChild(panel);
+  }
+  panel.innerHTML = pointDetailHtml(pt, spot);
+  document.getElementById('fcPointDetailClose').addEventListener('click', ()=>panel.remove());
+  panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
 function renderForecastResults(rawTimeline, tideAvailable, tideError, daylightByDate){
   const resultsEl = document.getElementById('forecastResults');
   resultsEl.innerHTML = '';
@@ -125,25 +172,30 @@ function renderForecastResults(rawTimeline, tideAvailable, tideError, daylightBy
   bestBox.appendChild(list);
   resultsEl.appendChild(bestBox);
 
+  fcCurrentSampledPoints = sampledPoints;
+  fcCurrentOrderedSpots = spotsToScore;
+
   const dayStarts = dayStartFlags(sampledPoints);
   const headerCellsHtml = sampledPoints.map((p,i)=>`<th${dayStarts[i]?' class="day-start"':''}>${formatForecastTime(p.time)}</th>`).join('');
 
   const windBox = document.createElement('div');
-  windBox.innerHTML = '<h3 class="fc-heading">Wind timeline</h3>' + scrollHintHtml(sampledPoints);
+  windBox.innerHTML = '<h3 class="fc-heading">Wind timeline</h3>' + scrollHintHtml(sampledPoints)
+    + '<p class="buoynote" style="margin:0 0 6px;">Click any value for the full swell/wind/tide breakdown.</p>';
   const windWrap = document.createElement('div');
   windWrap.className = 'fc-scroll';
   const windTable = document.createElement('table');
   windTable.className = 'forecast-grid';
   windTable.innerHTML = `
     <thead><tr><th class="sticky-col"></th>${headerCellsHtml}</tr></thead>
-    <tbody><tr><td class="sticky-col">Wind</td>${sampledPoints.map((p,i)=>`<td${dayStarts[i]?' class="day-start"':''}>${p.windS!=null?p.windS+'mph '+dirLabel(p.windDir):'–'}</td>`).join('')}</tr></tbody>
+    <tbody><tr><td class="sticky-col">Wind</td>${sampledPoints.map((p,i)=>`<td class="fc-cell${dayStarts[i]?' day-start':''}" data-point-idx="${i}">${p.windS!=null?p.windS+'mph '+dirLabel(p.windDir):'–'}</td>`).join('')}</tr></tbody>
   `;
   windWrap.appendChild(windTable);
   windBox.appendChild(windWrap);
   resultsEl.appendChild(windBox);
 
   const gridBox = document.createElement('div');
-  gridBox.innerHTML = '<h3 class="fc-heading">Spot scores by time</h3>' + scrollHintHtml(sampledPoints);
+  gridBox.innerHTML = '<h3 class="fc-heading">Spot scores by time</h3>' + scrollHintHtml(sampledPoints)
+    + '<p class="buoynote" style="margin:0 0 6px;">Click any score for the full swell/wind/tide breakdown.</p>';
   const gridWrap = document.createElement('div');
   gridWrap.className = 'fc-scroll';
   const grid = document.createElement('table');
@@ -159,7 +211,7 @@ function renderForecastResults(rawTimeline, tideAvailable, tideError, daylightBy
       ${orderedSpots.map(spot=>{
         const cells = sampledPoints.map((p,i)=>{
           const r = scoreSpot(spot, Object.assign({waveStyles: userWaveStyles}, p), sessionCache, userSkillLevel);
-          return `<td${dayStarts[i]?' class="day-start"':''} style="background:${barColor(r.score)};color:#fff;">${r.score}</td>`;
+          return `<td class="fc-cell${dayStarts[i]?' day-start':''}" data-point-idx="${i}" data-spot-id="${spot.id}" style="background:${barColor(r.score)};color:#fff;">${r.score}</td>`;
         }).join('');
         return `<tr><td class="sticky-col">${spot.name}</td>${cells}</tr>`;
       }).join('')}
@@ -181,6 +233,19 @@ function renderForecastResults(rawTimeline, tideAvailable, tideError, daylightBy
 
 function initForecastSection(){
   refreshForecastSectionLocations();
+
+  // One delegated listener for the life of the page, reading from the
+  // module-level fcCurrentSampledPoints/fcCurrentOrderedSpots that
+  // renderForecastResults() refreshes on every run — avoids re-attaching
+  // (and piling up) a listener each time "Get forecast" is clicked.
+  document.getElementById('forecastResults').addEventListener('click', (e)=>{
+    const td = e.target.closest('td.fc-cell');
+    if(!td) return;
+    const pt = fcCurrentSampledPoints[+td.dataset.pointIdx];
+    if(!pt) return;
+    const spot = td.dataset.spotId ? fcCurrentOrderedSpots.find(s=>s.id===td.dataset.spotId) : null;
+    showPointDetail(pt, spot);
+  });
 
   document.getElementById('runForecast').addEventListener('click', async ()=>{
     const btn = document.getElementById('runForecast');

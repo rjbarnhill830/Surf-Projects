@@ -112,3 +112,5 @@ button.primary:hover{background:var(--deep2);}
 .forecast-grid th{background:#fbf8ef;font-weight:600;color:var(--muted);}
 .forecast-grid td.sticky-col,.forecast-grid th.sticky-col{position:sticky;left:0;background:#fbf8ef;text-align:left;font-weight:600;}
 .forecast-grid th.day-start,.forecast-grid td.day-start{border-left:2px solid var(--ink);}
+.forecast-grid td.fc-cell{cursor:pointer;}
+.forecast-grid td.fc-cell:hover{outline:2px solid var(--ink);outline-offset:-2px;}
