@@ -228,10 +228,19 @@ function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, ti
   windBox.appendChild(windWrap);
   resultsEl.appendChild(windBox);
 
+  // "North to South"/"Closest to me" reuse the same lat/lon and home
+  // location as the Ranked spots section's geo sort — a spot with no
+  // coordinates (a custom spot added without them) sorts to the bottom
+  // rather than breaking the comparison.
+  const fcSortModeEl = document.getElementById('fcSortMode');
+  const fcSortMode = fcSortModeEl ? fcSortModeEl.value : 'score';
+  const sortModeLabel = fcSortMode==='northsouth' ? 'North to South' : fcSortMode==='distance' ? 'closest to you first' : null;
+
   const gridBox = document.createElement('div');
   gridBox.innerHTML = '<h3 class="fc-heading">Spot scores by time</h3>' + scrollHintHtml(sampledPoints)
     + '<p class="buoynote" style="margin:0 0 6px;">Click any score for the full swell/wind/tide breakdown.'
-    + (minScore>0 ? ` Only showing scores &ge; ${minScore}.` : '') + '</p>';
+    + (minScore>0 ? ` Only showing scores &ge; ${minScore}.` : '')
+    + (sortModeLabel ? ` Rows sorted ${sortModeLabel}.` : '') + '</p>';
   const gridWrap = document.createElement('div');
   gridWrap.className = 'fc-scroll';
   const grid = document.createElement('table');
@@ -243,6 +252,15 @@ function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, ti
   const orderedSpots = [...spotsToScore]
     .filter(spot => (bestPerSpot[spot.id] ? bestPerSpot[spot.id].score : 0) >= minScore)
     .sort((a,b)=>{
+      if(fcSortMode==='northsouth'){
+        return (b.lat ?? -999)-(a.lat ?? -999);
+      }
+      if(fcSortMode==='distance'){
+        const hasHome = userHomeLat!=null && userHomeLon!=null;
+        const da = (hasHome && a.lat!=null) ? distanceMiles(userHomeLat,userHomeLon,a.lat,a.lon) : Infinity;
+        const db = (hasHome && b.lat!=null) ? distanceMiles(userHomeLat,userHomeLon,b.lat,b.lon) : Infinity;
+        return da-db;
+      }
       const pa = bestPerSpot[a.id] ? bestPerSpot[a.id].score : 0;
       const pb = bestPerSpot[b.id] ? bestPerSpot[b.id].score : 0;
       return pb-pa;
@@ -328,10 +346,13 @@ function initForecastSection(){
   });
 
   // Re-render instantly from the already-fetched data when the min-score
-  // filter changes, rather than requiring another "Get forecast" click.
-  document.getElementById('fcMinScore').addEventListener('input', ()=>{
+  // filter or sort order changes, rather than requiring another "Get
+  // forecast" click.
+  const rerenderFromCache = ()=>{
     if(!fcLastFetch) return;
     const {timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate} = fcLastFetch;
     renderForecastResults(timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate);
-  });
+  };
+  document.getElementById('fcMinScore').addEventListener('input', rerenderFromCache);
+  document.getElementById('fcSortMode').addEventListener('change', rerenderFromCache);
 }
