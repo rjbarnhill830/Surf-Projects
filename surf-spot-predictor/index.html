@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Surf spot predictor</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -336,6 +337,21 @@
   <p class="footer-note">This is a heuristic model, not a trained forecast &mdash; it encodes published spot guidance, not verified wave-by-wave outcomes. Session and spot-profile data is stored locally in this browser and isn't sent anywhere. Loading a live buoy or forecast reading does call NDBC's and Open-Meteo's public APIs directly from your browser.</p>
 </div>
 
+<div id="mapPickerOverlay" class="map-picker-overlay" style="display:none;">
+  <div class="map-picker-modal">
+    <div class="map-picker-header">
+      <b>Click the map to set this spot's location</b>
+      <button type="button" id="mapPickerClose" aria-label="Close">&times;</button>
+    </div>
+    <div id="mapPickerMap"></div>
+    <div class="map-picker-footer">
+      <span id="mapPickerCoords" class="buoynote"></span>
+      <button type="button" class="primary" id="mapPickerUse">Use this location</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/data.js"></script>
@@ -344,6 +360,7 @@
 <script src="js/scoring.js"></script>
 <script src="js/forecast-sources.js"></script>
 <script src="js/spreadsheet.js"></script>
+<script src="js/map-picker.js"></script>
 <script src="js/ui-config.js"></script>
 <script src="js/ui-sessions.js"></script>
 <script src="js/ui-preferences.js"></script>

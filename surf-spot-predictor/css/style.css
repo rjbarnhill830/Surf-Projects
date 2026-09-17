@@ -142,3 +142,13 @@ button.primary:hover{background:var(--deep2);}
 .chart-tooltip .tt-row i{width:10px;height:2px;display:inline-block;flex:none;}
 .chart-tooltip .tt-val{font-weight:700;}
 .chart-tooltip .tt-label{color:rgba(255,255,255,0.65);font-weight:400;}
+
+.map-picker-overlay{position:fixed;inset:0;background:rgba(13,43,46,0.55);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;}
+.map-picker-modal{background:#fff;border-radius:12px;max-width:640px;width:100%;box-shadow:0 12px 40px rgba(13,43,46,0.35);overflow:hidden;}
+.map-picker-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line);}
+.map-picker-header button{background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:var(--muted);padding:0 4px;}
+#mapPickerMap{height:360px;width:100%;background:var(--sand2);}
+.map-picker-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 18px;border-top:1px solid var(--line);}
+.map-picker-footer .buoynote{margin:0;}
+.map-picker-pin{background:transparent;border:none;}
+.map-picker-pin-dot{width:16px;height:16px;border-radius:50%;background:var(--mid);border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.5);}

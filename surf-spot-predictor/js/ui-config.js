@@ -42,6 +42,7 @@ function blankCustomSpot(){
     name: 'New spot',
     custom: true,
     excluded: false,
+    lat: null, lon: null,
     dirMin:240, dirMax:300, facing:270, exposure:'moderate', minH:2, maxH:8,
     windDir:90, windTol:40, maxWind:15,
     tideMin:-2, tideMax:7, minPeriod:6, maxPeriod:22,
@@ -122,6 +123,25 @@ function computeWindowFromFacing(facing, exposure){
   return {min:(facing-halfWidth+360)%360, max:(facing+halfWidth)%360};
 }
 
+// Powers the "North to South" sort and drive-distance filter in Ranked
+// spots and the Forecast grid (see distanceMiles()/bearingDegrees() in
+// scoring.js) — optional, since a spot with no coordinates just falls out
+// of those two features rather than breaking anything.
+function locationFieldHtml(id, cur){
+  const hasLoc = cur.lat!=null && cur.lon!=null;
+  return `
+    <div style="grid-column:1/-1;">
+      <label>Location</label>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+        <div><label>Latitude</label><input type="number" id="cfg-lat-${id}" step="0.0001" value="${hasLoc?cur.lat:''}" placeholder="e.g. 37.7749" style="width:130px;"></div>
+        <div><label>Longitude</label><input type="number" id="cfg-lon-${id}" step="0.0001" value="${hasLoc?cur.lon:''}" placeholder="e.g. -122.4194" style="width:130px;"></div>
+        <button type="button" class="pick-on-map" data-spot-id="${id}">Pick on map</button>
+      </div>
+      <p class="buoynote" style="margin-top:6px;">Used for the "North to South" sort and the drive-distance filter in Ranked spots and the Forecast grid. Leave blank if unknown.</p>
+    </div>
+  `;
+}
+
 function dirWindowFieldHtml(id, cur){
   return `
     <div style="grid-column:1/-1;">
@@ -158,6 +178,7 @@ function escapeHtml(s){
 function spotFieldsGridHtml(id, cur){
   return `
     <div class="cfggrid">
+      ${locationFieldHtml(id, cur)}
       <div><label>Bottom type</label>
         <select id="cfg-bottomtype-${id}">
           ${Object.keys(BOTTOM_TYPE_LABELS).map(k=>`<option value="${k}" ${(cur.bottomType||'unknown')===k?'selected':''}>${BOTTOM_TYPE_LABELS[k]}</option>`).join('')}
@@ -202,7 +223,11 @@ function spotFieldsGridHtml(id, cur){
 }
 
 function readFieldsFromForm(id){
+  const latRaw = document.getElementById('cfg-lat-'+id).value;
+  const lonRaw = document.getElementById('cfg-lon-'+id).value;
   return {
+    lat: latRaw!=='' ? +latRaw : null,
+    lon: lonRaw!=='' ? +lonRaw : null,
     bottomType: document.getElementById('cfg-bottomtype-'+id).value,
     skillLevel: document.getElementById('cfg-skilllevel-'+id).value,
     waveStyle: Array.from(document.querySelectorAll('.cfg-wavestyle-'+id+':checked')).map(el=>el.value),
