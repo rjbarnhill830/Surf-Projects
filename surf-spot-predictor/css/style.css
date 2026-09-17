@@ -157,3 +157,9 @@ button.primary:hover{background:var(--deep2);}
 .map-picker-footer .buoynote{margin:0;}
 .map-picker-pin{background:transparent;border:none;}
 .map-picker-pin-dot{width:16px;height:16px;border-radius:50%;background:var(--mid);border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.5);}
+
+#spotsOverviewMap{background:var(--sand2);}
+.spot-map-popup{font-family:inherit;min-width:170px;}
+.spot-map-popup b{font-size:14px;}
+.spot-map-popup .sub{font-size:12px;color:var(--muted);}
+.spot-map-popup .spot-map-jump{font-size:12px;padding:5px 10px;}

@@ -253,12 +253,20 @@ function renderConfigCards(){
   const box = document.getElementById('configCards');
   box.innerHTML='';
 
+  // Collected rather than appended directly so both built-in and custom
+  // cards can be interleaved into one North-to-South list below, matching
+  // the same sort convention as the Ranked spots and Forecast sections
+  // (distanceMiles()/bearingDegrees() callers in main.js) — a spot with no
+  // location sorts to the bottom rather than breaking the order.
+  const cards = [];
+
   defaultSpots.forEach(def=>{
     const cur = activeSpots.find(s=>s.id===def.id);
     const isEdited = !!overrides[def.id];
     const isExcluded = !!(overrides[def.id] && overrides[def.id].excluded);
     const el = document.createElement('details');
     el.className='cfgcard';
+    el.dataset.id = def.id;
     el.innerHTML=`
       <summary>${escapeHtml(cur.name)}${isEdited?'<span class="customized">edited</span>':''}${isExcluded?'<span class="customized" style="background:var(--low);">hidden</span>':''}<span class="chev">edit &#9662;</span></summary>
       <div style="margin-top:10px;">
@@ -285,12 +293,13 @@ function renderConfigCards(){
         <span class="cfgmsg" data-id="${def.id}" style="font-size:12px;color:var(--good);align-self:center;"></span>
       </div>
     `;
-    box.appendChild(el);
+    cards.push({lat: cur.lat, el});
   });
 
   customSpots.forEach(cur=>{
     const el = document.createElement('details');
     el.className='cfgcard';
+    el.dataset.id = cur.id;
     el.dataset.customId = cur.id;
     el.innerHTML=`
       <summary>${escapeHtml(cur.name)}<span class="customized" style="background:var(--good);">custom</span>${cur.excluded?'<span class="customized" style="background:var(--low);">hidden</span>':''}<span class="chev">edit &#9662;</span></summary>
@@ -318,8 +327,12 @@ function renderConfigCards(){
         <span class="cfgmsg" data-id="${cur.id}" style="font-size:12px;color:var(--good);align-self:center;"></span>
       </div>
     `;
-    box.appendChild(el);
+    cards.push({lat: cur.lat, el});
   });
+
+  cards.sort((a,b)=>(b.lat ?? -999)-(a.lat ?? -999));
+  cards.forEach(c=>box.appendChild(c.el));
+  renderSpotsOverviewMap();
 
   box.querySelectorAll('.dirpoint-checkbox').forEach(chk=>{
     chk.addEventListener('change', ()=>{
