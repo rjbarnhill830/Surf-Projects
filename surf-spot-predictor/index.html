@@ -87,7 +87,12 @@
             <option value="distance">Closest to me</option>
           </select>
         </div>
+        <div>
+          <label>Max distance (miles)</label>
+          <input type="number" id="fcMaxDistance" min="0" step="5" placeholder="No limit">
+        </div>
       </div>
+      <p class="buoynote" style="margin-top:8px;">Distance uses the home location set in the Ranked spots section below (straight-line, not driving distance) &mdash; set one there to filter here too.</p>
       <div class="buoybar">
         <button class="primary" id="runForecast">Get forecast</button>
       </div>

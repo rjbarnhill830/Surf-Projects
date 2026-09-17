@@ -154,7 +154,22 @@ function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, ti
     return;
   }
 
-  const spotsToScore = activeSpots.filter(s=>!s.excluded);
+  // Reuses the same home location as the Ranked spots section's distance
+  // filter (see main.js render()) — a spot with no coordinates is excluded
+  // rather than assumed nearby, same reasoning as there.
+  const hasHome = userHomeLat!=null && userHomeLon!=null;
+  const maxDistanceEl = document.getElementById('fcMaxDistance');
+  const maxDistanceRaw = maxDistanceEl ? maxDistanceEl.value : '';
+  const maxDistance = maxDistanceRaw!=='' ? +maxDistanceRaw : null;
+  const distanceFilterActive = hasHome && maxDistance!=null && maxDistance>0;
+
+  let spotsToScore = activeSpots.filter(s=>!s.excluded);
+  const totalBeforeDistanceFilter = spotsToScore.length;
+  if(distanceFilterActive){
+    spotsToScore = spotsToScore.filter(s=>s.lat!=null && s.lon!=null && distanceMiles(userHomeLat,userHomeLon,s.lat,s.lon)<=maxDistance);
+  }
+  const excludedByDistance = totalBeforeDistanceFilter - spotsToScore.length;
+
   // Every daylight hour is shown now, not sampled down to a few per day —
   // otherwise an hour like 5pm that falls between the old fixed sample
   // times would never appear even when it's the best-scoring window.
@@ -162,6 +177,17 @@ function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, ti
 
   const minScoreEl = document.getElementById('fcMinScore');
   const minScore = minScoreEl ? (+minScoreEl.value || 0) : 0;
+
+  if(distanceFilterActive && spotsToScore.length===0){
+    resultsEl.innerHTML = `<p class="empty">No spots with a known location are within ${maxDistance}mi of your home location &mdash; raise the max distance or clear it to see all spots.</p>`;
+    return;
+  }
+  if(distanceFilterActive){
+    const note = document.createElement('p');
+    note.className = 'buoynote';
+    note.textContent = `Showing ${spotsToScore.length} of ${totalBeforeDistanceFilter} spots within ${maxDistance}mi of your home location` + (excludedByDistance>0 ? ` (${excludedByDistance} excluded).` : '.');
+    resultsEl.appendChild(note);
+  }
 
   // Best pick per spot across the full hourly resolution. Tide is looked up
   // per spot's own station, not one shared curve for the whole region. The
@@ -355,4 +381,5 @@ function initForecastSection(){
   };
   document.getElementById('fcMinScore').addEventListener('input', rerenderFromCache);
   document.getElementById('fcSortMode').addEventListener('change', rerenderFromCache);
+  document.getElementById('fcMaxDistance').addEventListener('input', rerenderFromCache);
 }
