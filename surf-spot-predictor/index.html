@@ -57,144 +57,6 @@
   </section>
 
   <section>
-    <h2>Current conditions</h2>
-    <div class="panel">
-      <div class="grid">
-        <div>
-          <div class="row-out"><span>Swell height</span><b id="swellHOut">6 ft</b></div>
-          <input type="range" id="swellH" min="1" max="15" step="1" value="6">
-        </div>
-        <div>
-          <div class="row-out"><span>Swell period</span><b id="swellPOut">12 s</b></div>
-          <input type="range" id="swellP" min="6" max="20" step="1" value="12">
-        </div>
-        <div>
-          <label>Swell direction</label>
-          <select id="swellDir">
-            <option value="270">W</option>
-            <option value="292" selected>WNW</option>
-            <option value="315">NW</option>
-            <option value="247">WSW</option>
-            <option value="225">SW</option>
-            <option value="180">S</option>
-          </select>
-        </div>
-        <div>
-          <div class="row-out"><span>Swell 2 height <span style="font-weight:400;">(0 = none)</span></span><b id="swellH2Out">0 ft</b></div>
-          <input type="range" id="swellH2" min="0" max="15" step="1" value="0">
-        </div>
-        <div>
-          <div class="row-out"><span>Swell 2 period</span><b id="swellP2Out">10 s</b></div>
-          <input type="range" id="swellP2" min="6" max="20" step="1" value="10">
-        </div>
-        <div>
-          <label>Swell 2 direction</label>
-          <select id="swellDir2">
-            <option value="270">W</option>
-            <option value="292">WNW</option>
-            <option value="315" selected>NW</option>
-            <option value="247">WSW</option>
-            <option value="225">SW</option>
-            <option value="180">S</option>
-          </select>
-        </div>
-        <div>
-          <div class="row-out"><span>Wind speed</span><b id="windSOut">10 mph</b></div>
-          <input type="range" id="windS" min="0" max="30" step="1" value="10">
-        </div>
-        <div>
-          <label>Wind direction</label>
-          <select id="windDir">
-            <option value="90" selected>E</option>
-            <option value="45">NE</option>
-            <option value="0">N</option>
-            <option value="315">NW</option>
-            <option value="270">W</option>
-            <option value="225">SW</option>
-            <option value="180">S</option>
-            <option value="135">SE</option>
-          </select>
-        </div>
-        <div>
-          <div class="row-out"><span>Tide</span><b id="tideFtOut">2.5 ft (Mid)</b></div>
-          <input type="range" id="tideFt" min="-2" max="7" step="0.5" value="2.5">
-        </div>
-        <div>
-          <label>Tide direction</label>
-          <select id="tideDir">
-            <option value="incoming">Incoming (rising)</option>
-            <option value="outgoing">Outgoing (falling)</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="panel" style="margin-top:18px;background:#fff;">
-        <label>Reference location</label>
-        <select id="forecastLocation"></select>
-        <div class="grid" style="margin-top:14px;">
-          <div>
-            <button class="primary" id="loadBuoy" style="width:100%;">Load live NDBC buoy reading</button>
-          </div>
-          <div>
-            <label style="margin-bottom:4px;">Open-Meteo forecast, hours ahead</label>
-            <div style="display:flex;gap:8px;">
-              <select id="forecastHourOffset" style="flex:1;">
-                <option value="0">Now</option>
-                <option value="6">+6h</option>
-                <option value="12">+12h</option>
-                <option value="24">+24h</option>
-                <option value="48">+48h</option>
-                <option value="72">+72h</option>
-              </select>
-              <button class="primary" id="loadOpenMeteo" style="flex:1;">Load forecast</button>
-            </div>
-          </div>
-        </div>
-        <p class="buoynote" id="buoyNote">Buoys and open-ocean forecast models read swell before it reaches shore &mdash; expect actual surf to run smaller and shaped by each spot's sandbar. Load both sources at the same location to compare them.</p>
-        <div id="forecastCompare"></div>
-        <div id="openMeteoTrend"></div>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <h2>Ranked spots</h2>
-    <div class="panel" style="margin-bottom:16px;" id="geoFilterPanel">
-      <div class="grid">
-        <div>
-          <label>Sort by</label>
-          <select id="sortMode">
-            <option value="score">Best score</option>
-            <option value="northsouth">North to South</option>
-            <option value="distance">Closest to me</option>
-          </select>
-        </div>
-        <div>
-          <label>Max drive distance (miles)</label>
-          <input type="number" id="maxDistance" min="0" step="5" placeholder="No limit">
-        </div>
-      </div>
-      <div class="buoybar" style="margin-top:12px;">
-        <button class="primary" id="useMyLocation">Use my location</button>
-      </div>
-      <div class="grid" style="margin-top:10px;">
-        <div>
-          <label>Or enter latitude</label>
-          <input type="number" id="homeLat" step="0.0001" placeholder="e.g. 37.7749">
-        </div>
-        <div>
-          <label>Or enter longitude</label>
-          <input type="number" id="homeLon" step="0.0001" placeholder="e.g. -122.4194">
-        </div>
-      </div>
-      <p class="buoynote" id="homeLocationNote">No location set yet &mdash; "Closest to me" sort and the distance filter need one.</p>
-      <p class="buoynote">Distance is straight-line ("as the crow flies"), not routed driving distance &mdash; a reasonable stand-in along the coast, but treat it as a lower bound on the actual drive.</p>
-    </div>
-    <p class="sub" id="hiddenNote" style="margin-bottom:12px;"></p>
-    <div class="results" id="results"></div>
-  </section>
-
-  <section>
     <h2>Forecast</h2>
     <p class="sub" style="margin-bottom:16px;">Pull a full swell + wind + tide outlook for a day, a few days, or the week ahead, and see which spot(s) are likely to be best and when.</p>
     <div class="panel">
@@ -234,7 +96,7 @@
 
   <section>
     <h2>Customize spot profiles</h2>
-    <p class="sub" style="margin-bottom:16px;">Edit any spot's ideal swell, wind and tide if you know it better than the published guides, or add a spot you haven't surfed yet but want to consider &mdash; set its profile from what you've heard works there, with or without any logged sessions. Changes are saved to this browser and used in the ranking above.</p>
+    <p class="sub" style="margin-bottom:16px;">Edit any spot's ideal swell, wind and tide if you know it better than the published guides, or add a spot you haven't surfed yet but want to consider &mdash; set its profile from what you've heard works there, with or without any logged sessions. Changes are saved to this browser and used in the ranking below.</p>
     <button class="primary" id="addCustomSpot" style="margin-bottom:16px;">Add a new spot&hellip;</button>
     <div id="configCards" style="display:flex;flex-direction:column;gap:14px;"></div>
   </section>
@@ -332,6 +194,148 @@
     </div>
 
     <div class="sessions" id="sessionList"></div>
+  </section>
+
+  <section>
+    <details class="section-collapsible">
+      <summary><h2>Current conditions<span class="chev">&#9662;</span></h2></summary>
+      <div class="panel">
+        <div class="grid">
+          <div>
+            <div class="row-out"><span>Swell height</span><b id="swellHOut">6 ft</b></div>
+            <input type="range" id="swellH" min="1" max="15" step="1" value="6">
+          </div>
+          <div>
+            <div class="row-out"><span>Swell period</span><b id="swellPOut">12 s</b></div>
+            <input type="range" id="swellP" min="6" max="20" step="1" value="12">
+          </div>
+          <div>
+            <label>Swell direction</label>
+            <select id="swellDir">
+              <option value="270">W</option>
+              <option value="292" selected>WNW</option>
+              <option value="315">NW</option>
+              <option value="247">WSW</option>
+              <option value="225">SW</option>
+              <option value="180">S</option>
+            </select>
+          </div>
+          <div>
+            <div class="row-out"><span>Swell 2 height <span style="font-weight:400;">(0 = none)</span></span><b id="swellH2Out">0 ft</b></div>
+            <input type="range" id="swellH2" min="0" max="15" step="1" value="0">
+          </div>
+          <div>
+            <div class="row-out"><span>Swell 2 period</span><b id="swellP2Out">10 s</b></div>
+            <input type="range" id="swellP2" min="6" max="20" step="1" value="10">
+          </div>
+          <div>
+            <label>Swell 2 direction</label>
+            <select id="swellDir2">
+              <option value="270">W</option>
+              <option value="292">WNW</option>
+              <option value="315" selected>NW</option>
+              <option value="247">WSW</option>
+              <option value="225">SW</option>
+              <option value="180">S</option>
+            </select>
+          </div>
+          <div>
+            <div class="row-out"><span>Wind speed</span><b id="windSOut">10 mph</b></div>
+            <input type="range" id="windS" min="0" max="30" step="1" value="10">
+          </div>
+          <div>
+            <label>Wind direction</label>
+            <select id="windDir">
+              <option value="90" selected>E</option>
+              <option value="45">NE</option>
+              <option value="0">N</option>
+              <option value="315">NW</option>
+              <option value="270">W</option>
+              <option value="225">SW</option>
+              <option value="180">S</option>
+              <option value="135">SE</option>
+            </select>
+          </div>
+          <div>
+            <div class="row-out"><span>Tide</span><b id="tideFtOut">2.5 ft (Mid)</b></div>
+            <input type="range" id="tideFt" min="-2" max="7" step="0.5" value="2.5">
+          </div>
+          <div>
+            <label>Tide direction</label>
+            <select id="tideDir">
+              <option value="incoming">Incoming (rising)</option>
+              <option value="outgoing">Outgoing (falling)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:18px;background:#fff;">
+          <label>Reference location</label>
+          <select id="forecastLocation"></select>
+          <div class="grid" style="margin-top:14px;">
+            <div>
+              <button class="primary" id="loadBuoy" style="width:100%;">Load live NDBC buoy reading</button>
+            </div>
+            <div>
+              <label style="margin-bottom:4px;">Open-Meteo forecast, hours ahead</label>
+              <div style="display:flex;gap:8px;">
+                <select id="forecastHourOffset" style="flex:1;">
+                  <option value="0">Now</option>
+                  <option value="6">+6h</option>
+                  <option value="12">+12h</option>
+                  <option value="24">+24h</option>
+                  <option value="48">+48h</option>
+                  <option value="72">+72h</option>
+                </select>
+                <button class="primary" id="loadOpenMeteo" style="flex:1;">Load forecast</button>
+              </div>
+            </div>
+          </div>
+          <p class="buoynote" id="buoyNote">Buoys and open-ocean forecast models read swell before it reaches shore &mdash; expect actual surf to run smaller and shaped by each spot's sandbar. Load both sources at the same location to compare them.</p>
+          <div id="forecastCompare"></div>
+          <div id="openMeteoTrend"></div>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <section>
+    <details class="section-collapsible">
+      <summary><h2>Ranked spots<span class="chev">&#9662;</span></h2></summary>
+      <div class="panel" style="margin-bottom:16px;" id="geoFilterPanel">
+        <div class="grid">
+          <div>
+            <label>Sort by</label>
+            <select id="sortMode">
+              <option value="score">Best score</option>
+              <option value="northsouth">North to South</option>
+              <option value="distance">Closest to me</option>
+            </select>
+          </div>
+          <div>
+            <label>Max drive distance (miles)</label>
+            <input type="number" id="maxDistance" min="0" step="5" placeholder="No limit">
+          </div>
+        </div>
+        <div class="buoybar" style="margin-top:12px;">
+          <button class="primary" id="useMyLocation">Use my location</button>
+        </div>
+        <div class="grid" style="margin-top:10px;">
+          <div>
+            <label>Or enter latitude</label>
+            <input type="number" id="homeLat" step="0.0001" placeholder="e.g. 37.7749">
+          </div>
+          <div>
+            <label>Or enter longitude</label>
+            <input type="number" id="homeLon" step="0.0001" placeholder="e.g. -122.4194">
+          </div>
+        </div>
+        <p class="buoynote" id="homeLocationNote">No location set yet &mdash; "Closest to me" sort and the distance filter need one.</p>
+        <p class="buoynote">Distance is straight-line ("as the crow flies"), not routed driving distance &mdash; a reasonable stand-in along the coast, but treat it as a lower bound on the actual drive.</p>
+      </div>
+      <p class="sub" id="hiddenNote" style="margin-bottom:12px;"></p>
+      <div class="results" id="results"></div>
+    </details>
   </section>
 
   <p class="footer-note">This is a heuristic model, not a trained forecast &mdash; it encodes published spot guidance, not verified wave-by-wave outcomes. Session and spot-profile data is stored locally in this browser and isn't sent anywhere. Loading a live buoy or forecast reading does call NDBC's and Open-Meteo's public APIs directly from your browser.</p>
