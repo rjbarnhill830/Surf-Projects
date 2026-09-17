@@ -79,6 +79,25 @@
           </select>
         </div>
         <div>
+          <div class="row-out"><span>Swell 2 height <span style="font-weight:400;">(0 = none)</span></span><b id="swellH2Out">0 ft</b></div>
+          <input type="range" id="swellH2" min="0" max="15" step="1" value="0">
+        </div>
+        <div>
+          <div class="row-out"><span>Swell 2 period</span><b id="swellP2Out">10 s</b></div>
+          <input type="range" id="swellP2" min="6" max="20" step="1" value="10">
+        </div>
+        <div>
+          <label>Swell 2 direction</label>
+          <select id="swellDir2">
+            <option value="270">W</option>
+            <option value="292">WNW</option>
+            <option value="315" selected>NW</option>
+            <option value="247">WSW</option>
+            <option value="225">SW</option>
+            <option value="180">S</option>
+          </select>
+        </div>
+        <div>
           <div class="row-out"><span>Wind speed</span><b id="windSOut">10 mph</b></div>
           <input type="range" id="windS" min="0" max="30" step="1" value="10">
         </div>

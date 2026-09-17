@@ -91,6 +91,7 @@ function tideForSpotAt(spot, time, tideByStation, fallbackStationId){
 function pointDetailHtml(pt, spot, tideByStation, fallbackStationId){
   const tide = tideForSpotAt(spot, pt.time, tideByStation, fallbackStationId);
   const tideText = tide.tideFt!=null ? `${tide.tideFt}ft (${tide.tideDir||'unknown direction'})` : 'not available';
+  const hasSwell2 = pt.swellH2!=null;
   let scoreSection = '';
   if(spot){
     const conditions = Object.assign({waveStyles: userWaveStyles}, pt, tide);
@@ -98,7 +99,8 @@ function pointDetailHtml(pt, spot, tideByStation, fallbackStationId){
     scoreSection = `
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);">
         <b>${spot.name}</b> &mdash; <span style="color:${barColor(r.score)};font-weight:700;">${r.score}</span>
-        ${r.transmission!==1 ? `<div class="note">${pt.swellH}ft offshore &rarr; ~${r.localH}ft here (&times;${r.transmission})</div>` : ''}
+        ${r.transmission!==1 ? `<div class="note">${(r.primarySwellIndex===2?pt.swellH2:pt.swellH)}ft offshore &rarr; ~${r.localH}ft here (&times;${r.transmission})</div>` : ''}
+        ${hasSwell2 ? `<div class="note">Scored on Swell ${r.primarySwellIndex} &mdash; the better-aligned of the two for this spot.</div>` : ''}
         ${r.outOfRange.length ? `<div class="note" style="color:var(--mid);">Outside ideal range &mdash; ${r.outOfRange.join(', ')}.</div>` : ''}
       </div>
     `;
@@ -108,7 +110,8 @@ function pointDetailHtml(pt, spot, tideByStation, fallbackStationId){
       <b>${formatForecastTime(pt.time)}</b>
       <button type="button" id="fcPointDetailClose" style="padding:2px 9px;">&times;</button>
     </div>
-    <div class="note" style="margin-top:6px;">Swell: ${pt.swellH}ft @ ${pt.swellP}s ${dirLabel(pt.swellDir)}</div>
+    <div class="note" style="margin-top:6px;">${hasSwell2?'Swell 1':'Swell'}: ${pt.swellH}ft @ ${pt.swellP}s ${dirLabel(pt.swellDir)}</div>
+    ${hasSwell2 ? `<div class="note">Swell 2: ${pt.swellH2}ft @ ${pt.swellP2}s ${dirLabel(pt.swellDir2)}</div>` : ''}
     <div class="note">Wind: ${pt.windS!=null?pt.windS+'mph '+dirLabel(pt.windDir):'not available'}</div>
     <div class="note">Tide: ${tideText}</div>
     ${scoreSection}

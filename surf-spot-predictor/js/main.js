@@ -3,6 +3,9 @@ function render(){
     swellH:+document.getElementById('swellH').value,
     swellP:+document.getElementById('swellP').value,
     swellDir:+document.getElementById('swellDir').value,
+    swellH2:+document.getElementById('swellH2').value,
+    swellP2:+document.getElementById('swellP2').value,
+    swellDir2:+document.getElementById('swellDir2').value,
     windS:+document.getElementById('windS').value,
     windDir:+document.getElementById('windDir').value,
     tideFt:+document.getElementById('tideFt').value,
@@ -11,6 +14,8 @@ function render(){
   };
   document.getElementById('swellHOut').textContent=c.swellH+' ft';
   document.getElementById('swellPOut').textContent=c.swellP+' s';
+  document.getElementById('swellH2Out').textContent=c.swellH2+' ft';
+  document.getElementById('swellP2Out').textContent=c.swellP2+' s';
   document.getElementById('windSOut').textContent=c.windS+' mph';
   document.getElementById('tideFtOut').textContent=c.tideFt.toFixed(1)+' ft ('+(tideFtToCategory(c.tideFt).charAt(0).toUpperCase()+tideFtToCategory(c.tideFt).slice(1))+')';
 
@@ -39,6 +44,7 @@ function render(){
         <div class="note">${r.spot.blurb}</div>
         ${r.spot.notes ? `<div class="note" style="font-style:italic;margin-top:3px;">${r.spot.notes}</div>` : ''}
         ${r.transmission!==1 ? `<div class="note" style="margin-top:3px;">${c.swellH}ft offshore &rarr; ~${r.localH}ft here (&times;${r.transmission})</div>` : ''}
+        ${r.swell2 && r.primarySwellIndex===2 ? `<div class="note" style="margin-top:3px;">Scored on Swell 2 (${c.swellH2}ft @ ${c.swellP2}s ${dirLabel(c.swellDir2)}) &mdash; better aligned for this spot than Swell 1.</div>` : ''}
         ${r.outOfRange.length ? `<div class="note" style="color:var(--mid);margin-top:3px;">Outside ideal range &mdash; ${r.outOfRange.join(', ')}.</div>` : ''}
       </div>
       <div class="score" style="color:${barColor(r.score)}">${r.score}</div>
@@ -60,6 +66,12 @@ function applyReadingToConditions(reading){
   document.getElementById('swellH').value = reading.swellH;
   document.getElementById('swellP').value = reading.swellP;
   document.getElementById('swellDir').value = reading.swellDir;
+  // NDBC's basic realtime2 feed doesn't carry a second swell partition, so a
+  // buoy reading has no swellH2 — reset Swell 2 to "off" rather than leaving
+  // a stale reading from a previously-loaded Open-Meteo source in place.
+  document.getElementById('swellH2').value = reading.swellH2!=null ? reading.swellH2 : 0;
+  if(reading.swellP2!=null) document.getElementById('swellP2').value = reading.swellP2;
+  if(reading.swellDir2!=null) document.getElementById('swellDir2').value = reading.swellDir2;
   if(reading.windS!=null) document.getElementById('windS').value = reading.windS;
   if(reading.windDir!=null) document.getElementById('windDir').value = reading.windDir;
 }
@@ -75,7 +87,8 @@ function renderForecastCompare(locId){
   }
   if(readings.openMeteo){
     const o = readings.openMeteo;
-    rows.push(`<div class="sess"><div><b>Open-Meteo forecast</b><div class="meta">${o.time} &middot; ${o.swellH}ft @ ${o.swellP}s ${dirLabel(o.swellDir)}${o.windS!=null?`, wind ${o.windS}mph ${dirLabel(o.windDir)}`:''}</div></div></div>`);
+    const swell2Text = o.swellH2!=null ? ` + ${o.swellH2}ft @ ${o.swellP2}s ${dirLabel(o.swellDir2)}` : '';
+    rows.push(`<div class="sess"><div><b>Open-Meteo forecast</b><div class="meta">${o.time} &middot; ${o.swellH}ft @ ${o.swellP}s ${dirLabel(o.swellDir)}${swell2Text}${o.windS!=null?`, wind ${o.windS}mph ${dirLabel(o.windDir)}`:''}</div></div></div>`);
   }
   box.innerHTML = `<div class="sessions" style="margin-top:12px;">${rows.join('')}</div>`;
 }
@@ -103,7 +116,7 @@ function updateBuoyButtonAvailability(){
 }
 
 function initConditionsPanel(){
-  ['swellH','swellP','swellDir','windS','windDir','tideFt','tideDir'].forEach(id=>{
+  ['swellH','swellP','swellDir','swellH2','swellP2','swellDir2','windS','windDir','tideFt','tideDir'].forEach(id=>{
     document.getElementById(id).addEventListener('input', ()=>{ lastForecastSnapshot=null; render(); });
     document.getElementById(id).addEventListener('change', ()=>{ lastForecastSnapshot=null; render(); });
   });

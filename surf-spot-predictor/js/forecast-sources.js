@@ -47,7 +47,7 @@ async function fetchNdbcBuoy(stationId){
 // the closest hourly timestamp to now + hourOffset hours. Both are free,
 // public, no API key, and documented as CORS-enabled for browser use.
 async function fetchOpenMeteoForecast(lat, lon, hourOffset){
-  const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=swell_wave_height,swell_wave_period,swell_wave_direction&timezone=auto&forecast_days=3`;
+  const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=swell_wave_height,swell_wave_period,swell_wave_direction,secondary_swell_wave_height,secondary_swell_wave_period,secondary_swell_wave_direction&timezone=auto&forecast_days=3`;
   const windUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=windspeed_10m,winddirection_10m&wind_speed_unit=mph&timezone=auto&forecast_days=3`;
 
   let marineRes, windRes;
@@ -81,10 +81,22 @@ async function fetchOpenMeteoForecast(lat, lon, hourOffset){
     throw new Error('Open-Meteo has no swell forecast for that hour yet.');
   }
 
+  // The ocean usually has more than one swell running at once — Open-Meteo's
+  // secondary partition, when present, is fed into scoring alongside the
+  // primary. Not every hour/location has a distinct second swell, so a
+  // missing value here just means "not registering," not a fetch failure.
+  const hM2 = marine.hourly.secondary_swell_wave_height?.[targetIdx];
+  const p2 = marine.hourly.secondary_swell_wave_period?.[targetIdx];
+  const d2 = marine.hourly.secondary_swell_wave_direction?.[targetIdx];
+  const hasSwell2 = hM2!=null && p2!=null && d2!=null && hM2>0;
+
   return {
     swellH: Math.round(hM*M_TO_FT*10)/10,
     swellP: Math.round(p),
     swellDir: Math.round(d),
+    swellH2: hasSwell2 ? Math.round(hM2*M_TO_FT*10)/10 : null,
+    swellP2: hasSwell2 ? Math.round(p2) : null,
+    swellDir2: hasSwell2 ? Math.round(d2) : null,
     windS: ws==null ? null : Math.round(ws),
     windDir: wd==null ? null : Math.round(wd),
     time: times[targetIdx]
@@ -247,7 +259,7 @@ function sunTimesLocalMinutes(dateStr, lat, lon, utcOffsetSeconds){
 // rather than being omitted, so callers can tell "no station configured" apart
 // from "station configured but the fetch failed".
 async function fetchForecastTimeline(location, days, spots){
-  const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${location.lat}&longitude=${location.lon}&hourly=swell_wave_height,swell_wave_period,swell_wave_direction&timezone=auto&forecast_days=${days}`;
+  const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${location.lat}&longitude=${location.lon}&hourly=swell_wave_height,swell_wave_period,swell_wave_direction,secondary_swell_wave_height,secondary_swell_wave_period,secondary_swell_wave_direction&timezone=auto&forecast_days=${days}`;
   const windUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&hourly=windspeed_10m,winddirection_10m&wind_speed_unit=mph&timezone=auto&forecast_days=${days}`;
 
   let marineRes, windRes;
@@ -274,11 +286,20 @@ async function fetchForecastTimeline(location, days, spots){
     const d = marine.hourly.swell_wave_direction[i];
     if(hM==null || p==null || d==null) return null;
     const w = windByTime[t];
+    // Secondary swell partition — see fetchOpenMeteoForecast for why a
+    // missing/zero reading here just means no second swell that hour.
+    const hM2 = marine.hourly.secondary_swell_wave_height?.[i];
+    const p2 = marine.hourly.secondary_swell_wave_period?.[i];
+    const d2 = marine.hourly.secondary_swell_wave_direction?.[i];
+    const hasSwell2 = hM2!=null && p2!=null && d2!=null && hM2>0;
     return {
       time: t,
       swellH: Math.round(hM*M_TO_FT*10)/10,
       swellP: Math.round(p),
       swellDir: Math.round(d),
+      swellH2: hasSwell2 ? Math.round(hM2*M_TO_FT*10)/10 : null,
+      swellP2: hasSwell2 ? Math.round(p2) : null,
+      swellDir2: hasSwell2 ? Math.round(d2) : null,
       windS: w && w.s!=null ? Math.round(w.s) : null,
       windDir: w && w.d!=null ? Math.round(w.d) : null
     };

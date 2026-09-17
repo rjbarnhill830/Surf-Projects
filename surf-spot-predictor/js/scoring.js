@@ -24,8 +24,35 @@ function tideFtToCategory(ft){
   return 'mid';
 }
 
-function checkRange(spot,c){
+// Direction/size/period scoring for a single swell train, factored out so it
+// can be run once per swell when there are two registering at once. localH
+// applies the spot's transmission factor (shoaling/refraction calibration)
+// the same way regardless of which swell it's being run on.
+function swellComponentScores(spot, dir, height, period, transmission){
   const outOfRange=[];
+  const dirDist = angleDistanceToWindow(dir, spot.dirMin, spot.dirMax);
+  const dirScore = Math.max(0,100-(dirDist/DIR_FALLOFF_DEGREES*100));
+
+  const localH = Math.round(height*transmission*10)/10;
+  let sizeScore;
+  if(localH<spot.minH){ sizeScore=Math.max(0,100-(spot.minH-localH)*20); outOfRange.push(`swell size (wants ${spot.minH}-${spot.maxH}ft)`); }
+  else if(localH>spot.maxH){ sizeScore=Math.max(0,100-(localH-spot.maxH)*15); outOfRange.push(`swell size (wants ${spot.minH}-${spot.maxH}ft)`); }
+  else sizeScore=100;
+
+  let periodScore;
+  if(period<spot.minPeriod){ periodScore=Math.max(0,100-(spot.minPeriod-period)*15); outOfRange.push(`period (wants ${spot.minPeriod}-${spot.maxPeriod}s)`); }
+  else if(period>spot.maxPeriod){ periodScore=Math.max(0,100-(period-spot.maxPeriod)*8); outOfRange.push(`period (wants ${spot.minPeriod}-${spot.maxPeriod}s)`); }
+  else periodScore=100;
+
+  // Same relative weight direction/size/period carry in the overall score
+  // formula (0.22/0.13/0.09 of the total, i.e. 50%/29.5%/20.5% of just the
+  // swell portion) — used only to compare two swells against each other,
+  // not part of the spot's actual total score.
+  const blended = dirScore*0.5 + sizeScore*0.295 + periodScore*0.205;
+  return {dirScore, sizeScore, periodScore, localH, outOfRange, blended};
+}
+
+function checkRange(spot,c){
   // Swell transmission: a per-spot calibrated multiplier for how much of the
   // offshore/buoy swell height actually shows up as breaking wave height at
   // that beach (shoaling, refraction, local bathymetry). Defaults to 1 (no
@@ -33,16 +60,24 @@ function checkRange(spot,c){
   // sessions. Only the size score uses it — direction/wind/tide are about
   // matching, not magnitude, so they stay keyed to the raw offshore reading.
   const transmission = spot.transmission || 1;
-  const localH = Math.round(c.swellH*transmission*10)/10;
-  let sizeScore;
-  if(localH<spot.minH){ sizeScore=Math.max(0,100-(spot.minH-localH)*20); outOfRange.push(`swell size (wants ${spot.minH}-${spot.maxH}ft)`); }
-  else if(localH>spot.maxH){ sizeScore=Math.max(0,100-(localH-spot.maxH)*15); outOfRange.push(`swell size (wants ${spot.minH}-${spot.maxH}ft)`); }
-  else sizeScore=100;
 
-  let periodScore;
-  if(c.swellP<spot.minPeriod){ periodScore=Math.max(0,100-(spot.minPeriod-c.swellP)*15); outOfRange.push(`period (wants ${spot.minPeriod}-${spot.maxPeriod}s)`); }
-  else if(c.swellP>spot.maxPeriod){ periodScore=Math.max(0,100-(c.swellP-spot.maxPeriod)*8); outOfRange.push(`period (wants ${spot.minPeriod}-${spot.maxPeriod}s)`); }
-  else periodScore=100;
+  // The ocean usually has more than one swell running at once. When a
+  // second is available (c.swellH2/P2/Dir2 — e.g. Open-Meteo's secondary
+  // swell partition), each is scored independently against the spot's
+  // window/size/period preferences and whichever one would actually be more
+  // surfable there wins — a spot only "sees" the swell that suits it, not
+  // an average of both. A second swell of height 0 or missing fields is
+  // treated as not registering, not as an actual zero-height reading.
+  const swell1 = swellComponentScores(spot, c.swellDir, c.swellH, c.swellP, transmission);
+  const hasSwell2 = c.swellH2>0 && c.swellP2!=null && c.swellDir2!=null;
+  const swell2 = hasSwell2 ? swellComponentScores(spot, c.swellDir2, c.swellH2, c.swellP2, transmission) : null;
+  const primarySwellIndex = (swell2 && swell2.blended > swell1.blended) ? 2 : 1;
+  const primary = primarySwellIndex===2 ? swell2 : swell1;
+  const {dirScore, sizeScore, periodScore, localH} = primary;
+  // Cloned rather than reused directly — checkRange pushes more entries
+  // (tide, tide direction) onto this below, and swell1/swell2 are returned
+  // as-is for display, so they shouldn't pick up unrelated tide messages.
+  const outOfRange = [...primary.outOfRange];
 
   // A null tideFt/tideDir means tide data wasn't available for this reading
   // (e.g. no NOAA station for this zone) rather than an actual low/falling
@@ -72,16 +107,14 @@ function checkRange(spot,c){
     styleScore = 40 + 60*(matches/wantedStyles.length);
   }
 
-  return {sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, transmission};
+  return {dirScore, sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, transmission, primarySwellIndex, swell1, swell2};
 }
 
 function staticScore(spot,c){
-  const dirDist = angleDistanceToWindow(c.swellDir, spot.dirMin, spot.dirMax);
-  const dirScore = Math.max(0,100-(dirDist/DIR_FALLOFF_DEGREES*100));
   const windAngle = angDiff(c.windDir,spot.windDir);
   const windDirScore = Math.max(0,100-(windAngle/spot.windTol*100));
   const windScore = Math.max(0,Math.min(windDirScore,100-Math.max(0,c.windS-spot.maxWind)*8));
-  const {sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, transmission} = checkRange(spot,c);
+  const {dirScore, sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, transmission, primarySwellIndex, swell1, swell2} = checkRange(spot,c);
   let total;
   if(c.waveStyles && c.waveStyles.length>0){
     // Wave-style preference gets 0.15, with the original six components
@@ -93,7 +126,7 @@ function staticScore(spot,c){
     // approximation of it — nothing changes until you opt in.
     total = dirScore*0.22 + sizeScore*0.13 + periodScore*0.09 + windScore*0.28 + tideScore*0.18 + tideDirScore*0.10;
   }
-  return {total, outOfRange, localH, transmission};
+  return {total, outOfRange, localH, transmission, primarySwellIndex, swell1, swell2};
 }
 
 function personalProfile(spotId,sessions){
@@ -129,7 +162,7 @@ const SKILL_ORDER = {beginner:0, intermediate:1, advanced:2};
 // week-ahead forecast timeline so both always agree on how a spot is scored
 // for the same conditions and the same surfer.
 function scoreSpot(spot, conditions, sessions, userSkill){
-  let {total:base, outOfRange, localH, transmission} = staticScore(spot, conditions);
+  let {total:base, outOfRange, localH, transmission, primarySwellIndex, swell1, swell2} = staticScore(spot, conditions);
   const profile = personalProfile(spot.id, sessions);
   let total = base;
   let tag = null;
@@ -151,7 +184,7 @@ function scoreSpot(spot, conditions, sessions, userSkill){
   else if(gap>=2){ skillMultiplier = 0.25; outOfRange = outOfRange.concat(`requires ${spot.skillLevel} skill (you're set to ${userSkill})`); }
   total *= skillMultiplier;
 
-  return {score: round(Math.max(0, Math.min(100, total))), tag, outOfRange, localH, transmission};
+  return {score: round(Math.max(0, Math.min(100, total))), tag, outOfRange, localH, transmission, primarySwellIndex, swell1, swell2};
 }
 
 function barColor(s){ return s>=75?"var(--good)":s>=50?"var(--mid)":"var(--low)"; }
