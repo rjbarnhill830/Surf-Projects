@@ -92,8 +92,24 @@
           <input type="number" id="fcMaxDistance" min="0" step="5" placeholder="No limit">
         </div>
       </div>
-      <p class="buoynote" style="margin-top:8px;">Distance uses the home location set in the Ranked spots section below (straight-line, not driving distance) &mdash; set one there to filter here too.</p>
-      <div class="buoybar">
+      <div id="homeLocationPanel">
+        <div class="buoybar" style="margin-top:12px;">
+          <button class="primary" id="useMyLocation">Use my location</button>
+        </div>
+        <div class="grid" style="margin-top:10px;">
+          <div>
+            <label>Or enter latitude</label>
+            <input type="number" id="homeLat" step="0.0001" placeholder="e.g. 37.7749">
+          </div>
+          <div>
+            <label>Or enter longitude</label>
+            <input type="number" id="homeLon" step="0.0001" placeholder="e.g. -122.4194">
+          </div>
+        </div>
+        <p class="buoynote" id="homeLocationNote">No location set yet &mdash; "Closest to me" sort and the distance filter need one.</p>
+        <p class="buoynote">Distance is straight-line ("as the crow flies"), not routed driving distance &mdash; a reasonable stand-in along the coast, but treat it as a lower bound on the actual drive. This location is also used by the Ranked spots section below.</p>
+      </div>
+      <div class="buoybar" style="margin-top:12px;">
         <button class="primary" id="runForecast">Get forecast</button>
       </div>
       <p class="buoynote" id="forecastStatus"></p>
@@ -329,21 +345,7 @@
             <input type="number" id="maxDistance" min="0" step="5" placeholder="No limit">
           </div>
         </div>
-        <div class="buoybar" style="margin-top:12px;">
-          <button class="primary" id="useMyLocation">Use my location</button>
-        </div>
-        <div class="grid" style="margin-top:10px;">
-          <div>
-            <label>Or enter latitude</label>
-            <input type="number" id="homeLat" step="0.0001" placeholder="e.g. 37.7749">
-          </div>
-          <div>
-            <label>Or enter longitude</label>
-            <input type="number" id="homeLon" step="0.0001" placeholder="e.g. -122.4194">
-          </div>
-        </div>
-        <p class="buoynote" id="homeLocationNote">No location set yet &mdash; "Closest to me" sort and the distance filter need one.</p>
-        <p class="buoynote">Distance is straight-line ("as the crow flies"), not routed driving distance &mdash; a reasonable stand-in along the coast, but treat it as a lower bound on the actual drive.</p>
+        <p class="buoynote">Set your home location in the Forecast section above to enable "Closest to me" sort and this distance filter &mdash; distance is straight-line ("as the crow flies"), not routed driving distance.</p>
       </div>
       <p class="sub" id="hiddenNote" style="margin-bottom:12px;"></p>
       <div class="results" id="results"></div>

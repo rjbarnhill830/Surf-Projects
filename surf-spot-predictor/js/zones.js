@@ -88,7 +88,7 @@ function toggleNorcalOnlySections(){
   const isNorcal = currentZoneId === 'norcal';
   // Distance/geo sort needs every spot to have lat/lon, which only the
   // NorCal spot list carries — the Portugal demo zone's spots don't.
-  ['spreadsheetSection','importSection','geoFilterPanel'].forEach(id=>{
+  ['spreadsheetSection','importSection','geoFilterPanel','homeLocationPanel'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.style.display = isNorcal ? '' : 'none';
   });
