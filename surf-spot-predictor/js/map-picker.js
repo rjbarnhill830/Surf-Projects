@@ -58,9 +58,10 @@ function updateMapPickerCoordsDisplay(){
   document.getElementById('mapPickerCoords').textContent = `${pos.lat.toFixed(4)}, ${pos.lng.toFixed(4)}`;
 }
 
-function openMapPicker(latInputId, lonInputId){
+function openMapPicker(latInputId, lonInputId, headerText){
   const mapEl = document.getElementById('mapPickerMap');
   const useBtn = document.getElementById('mapPickerUse');
+  document.getElementById('mapPickerTitle').textContent = headerText || "Click the map to set this spot's location";
   try{
     ensureMapPickerInitialized();
   }catch(e){
@@ -110,9 +111,14 @@ function initMapPicker(){
     mapPickerTargetLatInput.value = pos.lat.toFixed(4);
     mapPickerTargetLonInput.value = pos.lng.toFixed(4);
     // Config cards only save on an explicit "Save changes" click, not on
-    // input — this just needs the fields visibly filled in.
+    // input — 'input' just needs the fields visibly filled in there. The
+    // home-location inputs in the Forecast section apply and persist on
+    // 'change' instead (see initLocationPanel in ui-preferences.js), so
+    // both are dispatched to cover either consumer.
     mapPickerTargetLatInput.dispatchEvent(new Event('input', {bubbles:true}));
     mapPickerTargetLonInput.dispatchEvent(new Event('input', {bubbles:true}));
+    mapPickerTargetLatInput.dispatchEvent(new Event('change', {bubbles:true}));
+    mapPickerTargetLonInput.dispatchEvent(new Event('change', {bubbles:true}));
     closeMapPicker();
   });
 
@@ -124,5 +130,9 @@ function initMapPicker(){
     const btn = e.target.closest('.pick-on-map');
     if(!btn) return;
     openMapPicker('cfg-lat-'+btn.dataset.spotId, 'cfg-lon-'+btn.dataset.spotId);
+  });
+
+  document.getElementById('homeLocationPanel')?.querySelector('.pick-home-on-map')?.addEventListener('click', ()=>{
+    openMapPicker('homeLat', 'homeLon', 'Click the map to set your home location');
   });
 }

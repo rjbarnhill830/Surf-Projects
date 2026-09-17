@@ -95,6 +95,7 @@
       <div id="homeLocationPanel">
         <div class="buoybar" style="margin-top:12px;">
           <button class="primary" id="useMyLocation">Use my location</button>
+          <button type="button" class="pick-home-on-map">Pick on map&hellip;</button>
         </div>
         <div class="grid" style="margin-top:10px;">
           <div>
@@ -358,7 +359,7 @@
 <div id="mapPickerOverlay" class="map-picker-overlay" style="display:none;">
   <div class="map-picker-modal">
     <div class="map-picker-header">
-      <b>Click the map to set this spot's location</b>
+      <b id="mapPickerTitle">Click the map to set this spot's location</b>
       <button type="button" id="mapPickerClose" aria-label="Close">&times;</button>
     </div>
     <div id="mapPickerMap"></div>
