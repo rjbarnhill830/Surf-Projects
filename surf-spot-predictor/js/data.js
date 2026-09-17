@@ -103,11 +103,16 @@ const norcalSpots = [
 
 // Approximate mooring positions, used only to query the Open-Meteo grid at
 // roughly the same point as each NDBC buoy so the two sources are comparable.
-// tideStation IDs are real NOAA CO-OPS stations (verified against
-// tidesandcurrents.noaa.gov), one per reference point: Bodega Harbor
-// entrance, San Francisco, and Pillar Point Harbor (Half Moon Bay).
+// tideStation IDs must be real NOAA CO-OPS *reference* (harmonic) stations,
+// not subordinate ones — a subordinate station (e.g. the original Bodega
+// Harbor entrance pick, 9415625) only has time/height offsets from a nearby
+// reference station and isn't queryable through the predictions API at all;
+// it fails every request with "No Predictions data was found" regardless of
+// date range. Point Reyes (9415020) is confirmed as a genuine reference
+// station in the same area. San Francisco and Pillar Point Harbor are also
+// confirmed reference stations.
 const norcalForecastLocations = [
-  { id:"bodega", label:"Bodega Bay", ndbcStation:"46013", tideStation:"9415625", lat:38.246, lon:-123.301,
+  { id:"bodega", label:"Bodega Bay", ndbcStation:"46013", tideStation:"9415020", lat:38.246, lon:-123.301,
     near:"Salmon Creek, Doran, Dillon" },
   { id:"sf", label:"San Francisco", ndbcStation:"46026", tideStation:"9414290", lat:37.759, lon:-122.833,
     near:"Stinson, Pacifica, Ocean Beach, Rockaway" },
