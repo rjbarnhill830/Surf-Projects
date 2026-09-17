@@ -231,3 +231,23 @@ function buildLineChart({title, unit, series, times, dayStarts, targetIdx, detai
   wrap.appendChild(tooltip);
   return wrap;
 }
+
+// Locks two charts' horizontal scroll together — for two charts built from
+// the same timeline/geometry (identical stepPx and point count, so their
+// scrollLeft values map 1:1 with no scaling needed), scrolling either one
+// moves both, so comparing them always lines up the same stretch of hours.
+// The syncing flag guards against the mirrored scroll event re-triggering
+// its own mirror back and forth.
+function linkChartScroll(a, b){
+  let syncing = false;
+  function mirror(from, to){
+    return ()=>{
+      if(syncing) return;
+      syncing = true;
+      to.scrollLeft = from.scrollLeft;
+      syncing = false;
+    };
+  }
+  a.addEventListener('scroll', mirror(a,b));
+  b.addEventListener('scroll', mirror(b,a));
+}

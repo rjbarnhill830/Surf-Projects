@@ -150,17 +150,23 @@ function renderOpenMeteoTrend(timeline, targetTime){
   if(hasSwell2){
     swellSeries.push({ label:'Swell 2', color: CHART_SWELL2_COLOR, values: timeline.map(p=>p.swellH2) });
   }
-  box.appendChild(buildLineChart({
+  const swellChart = buildLineChart({
     title: 'Swell height', unit: 'ft', series: swellSeries, times, dayStarts, targetIdx,
     detailFor: i => trendTooltipHtml(timeline[i], hasSwell2)
-  }));
-
-  box.appendChild(buildLineChart({
+  });
+  const windChart = buildLineChart({
     title: 'Wind speed', unit: 'mph',
     series: [{ label:'Wind', color: CHART_WIND_COLOR, values: timeline.map(p=>p.windS) }],
     times, dayStarts, targetIdx,
     detailFor: i => trendTooltipHtml(timeline[i], hasSwell2)
-  }));
+  });
+  box.appendChild(swellChart);
+  box.appendChild(windChart);
+  // Both charts share the same timeline/geometry (same stepPx, same point
+  // count), so their scroll positions map 1:1 — keep them locked together
+  // so scrolling one to compare a swell trend against wind always shows the
+  // same stretch of hours on both, instead of drifting apart.
+  linkChartScroll(swellChart.querySelector('.chart-scroll'), windChart.querySelector('.chart-scroll'));
 
   const details = document.createElement('details');
   details.style.marginTop = '14px';
