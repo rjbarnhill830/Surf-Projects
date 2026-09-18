@@ -77,7 +77,7 @@ function render(){
         <div class="note">${r.spot.blurb}</div>
         ${r.spot.notes ? `<div class="note" style="font-style:italic;margin-top:3px;">${r.spot.notes}</div>` : ''}
         ${r.favoriteBoost ? `<div class="note" style="margin-top:3px;">&#9733; Favorite &mdash; scored +${r.favoriteBoost}.</div>` : ''}
-        ${r.transmission!==1 ? `<div class="note" style="margin-top:3px;">${c.swellH}ft offshore &rarr; ~${r.localH}ft here (&times;${r.transmission})</div>` : ''}
+        ${(r.transmission!==1 || r.blockage!==1) ? `<div class="note" style="margin-top:3px;">${c.swellH}ft offshore &rarr; ~${r.localH}ft here (${[r.transmission!==1?`&times;${r.transmission} transmission`:null, r.blockage!==1?`&times;${r.blockage} off-angle blockage`:null].filter(Boolean).join(', ')})</div>` : ''}
         ${r.swell2 && r.primarySwellIndex===2 ? `<div class="note" style="margin-top:3px;">Scored on Swell 2 (${c.swellH2}ft @ ${c.swellP2}s ${dirLabel(c.swellDir2)}) &mdash; better aligned for this spot than Swell 1.</div>` : ''}
         ${r.outOfRange.length ? `<div class="note" style="color:var(--mid);margin-top:3px;">Outside ideal range &mdash; ${r.outOfRange.join(', ')}.</div>` : ''}
       </div>

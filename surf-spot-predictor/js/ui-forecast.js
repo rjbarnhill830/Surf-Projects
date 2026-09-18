@@ -100,7 +100,7 @@ function pointDetailHtml(pt, spot, tideByStation, fallbackStationId){
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);">
         <b>${spot.name}</b>${spot.favorite ? ' <span class="badge" style="background:var(--mid);">&#9733; favorite</span>' : ''}${spot.group ? ` <span class="note" style="display:inline;">(${escapeHtml(spot.group)})</span>` : ''} &mdash; <span style="color:${barColor(r.score)};font-weight:700;">${r.score}</span>
         ${r.favoriteBoost ? `<div class="note">&#9733; Favorite &mdash; scored +${r.favoriteBoost}.</div>` : ''}
-        ${r.transmission!==1 ? `<div class="note">${(r.primarySwellIndex===2?pt.swellH2:pt.swellH)}ft offshore &rarr; ~${r.localH}ft here (&times;${r.transmission})</div>` : ''}
+        ${(r.transmission!==1 || r.blockage!==1) ? `<div class="note">${(r.primarySwellIndex===2?pt.swellH2:pt.swellH)}ft offshore &rarr; ~${r.localH}ft here (${[r.transmission!==1?`&times;${r.transmission} transmission`:null, r.blockage!==1?`&times;${r.blockage} off-angle blockage`:null].filter(Boolean).join(', ')})</div>` : ''}
         ${hasSwell2 ? `<div class="note">Scored on Swell ${r.primarySwellIndex} &mdash; the better-aligned of the two for this spot.</div>` : ''}
         ${r.outOfRange.length ? `<div class="note" style="color:var(--mid);">Outside ideal range &mdash; ${r.outOfRange.join(', ')}.</div>` : ''}
       </div>

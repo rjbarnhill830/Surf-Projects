@@ -41,6 +41,18 @@ function angleDistanceToWindow(angle,min,max){
 // is just a soft landing, not a per-spot tunable like the old tolerance was.
 const DIR_FALLOFF_DEGREES = 30;
 
+// Swell blockage: a spot's direction window is the arc of open water it's
+// actually exposed to — swell arriving from outside that window doesn't
+// just break less cleanly, less of its energy reaches the beach at all
+// (headland/reef shadowing, refraction spreading the energy over a wider
+// stretch of coast), so the wave height that actually shows up is smaller
+// too. This is a separate, wider falloff than DIR_FALLOFF_DEGREES above: a
+// spot can still be meaningfully blocked well past the point where its
+// direction *quality* score has already bottomed out. Never reaches true
+// zero — some energy always wraps/diffracts in even from well off-angle.
+const BLOCKAGE_FALLOFF_DEGREES = 60;
+const BLOCKAGE_FLOOR = 0.35;
+
 function tideFtToCategory(ft){
   if(ft<1.5) return 'low';
   if(ft>4) return 'high';
@@ -50,13 +62,15 @@ function tideFtToCategory(ft){
 // Direction/size/period scoring for a single swell train, factored out so it
 // can be run once per swell when there are two registering at once. localH
 // applies the spot's transmission factor (shoaling/refraction calibration)
-// the same way regardless of which swell it's being run on.
+// and the off-angle blockage factor below the same way regardless of which
+// swell it's being run on.
 function swellComponentScores(spot, dir, height, period, transmission){
   const outOfRange=[];
   const dirDist = angleDistanceToWindow(dir, spot.dirMin, spot.dirMax);
   const dirScore = Math.max(0,100-(dirDist/DIR_FALLOFF_DEGREES*100));
+  const blockage = dirDist<=0 ? 1 : Math.max(BLOCKAGE_FLOOR, 1-(dirDist/BLOCKAGE_FALLOFF_DEGREES)*(1-BLOCKAGE_FLOOR));
 
-  const localH = Math.round(height*transmission*10)/10;
+  const localH = Math.round(height*transmission*blockage*10)/10;
   let sizeScore;
   // Undersized swell is scored proportionally to the spot's own minimum
   // (100 at minH, scaling straight down to 0 at zero swell) rather than a
@@ -80,7 +94,7 @@ function swellComponentScores(spot, dir, height, period, transmission){
   // the swell portion) — used only to compare two swells against each
   // other, not part of the spot's actual total score.
   const blended = dirScore*0.467 + sizeScore*0.233 + periodScore*0.30;
-  return {dirScore, sizeScore, periodScore, localH, outOfRange, blended};
+  return {dirScore, sizeScore, periodScore, localH, blockage: Math.round(blockage*100)/100, outOfRange, blended};
 }
 
 function checkRange(spot,c){
@@ -104,7 +118,7 @@ function checkRange(spot,c){
   const swell2 = hasSwell2 ? swellComponentScores(spot, c.swellDir2, c.swellH2, c.swellP2, transmission) : null;
   const primarySwellIndex = (swell2 && swell2.blended > swell1.blended) ? 2 : 1;
   const primary = primarySwellIndex===2 ? swell2 : swell1;
-  const {dirScore, sizeScore, periodScore, localH} = primary;
+  const {dirScore, sizeScore, periodScore, localH, blockage} = primary;
   // Cloned rather than reused directly — checkRange pushes more entries
   // (tide, tide direction) onto this below, and swell1/swell2 are returned
   // as-is for display, so they shouldn't pick up unrelated tide messages.
@@ -138,14 +152,14 @@ function checkRange(spot,c){
     styleScore = 40 + 60*(matches/wantedStyles.length);
   }
 
-  return {dirScore, sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, transmission, primarySwellIndex, swell1, swell2};
+  return {dirScore, sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2};
 }
 
 function staticScore(spot,c){
   const windAngle = angDiff(c.windDir,spot.windDir);
   const windDirScore = Math.max(0,100-(windAngle/spot.windTol*100));
   const windScore = Math.max(0,Math.min(windDirScore,100-Math.max(0,c.windS-spot.maxWind)*8));
-  const {dirScore, sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, transmission, primarySwellIndex, swell1, swell2} = checkRange(spot,c);
+  const {dirScore, sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2} = checkRange(spot,c);
 
   // Direction, size, and period are pass/fail constraints on whether a spot
   // is even working, not just three more weighted inputs to average in — a
@@ -176,7 +190,7 @@ function staticScore(spot,c){
     total = dirScore*0.28 + sizeScore*0.14 + periodScore*0.18 + windScore*0.24 + tideScore*0.11 + tideDirScore*0.05;
   }
   total *= swellGate;
-  return {total, outOfRange, localH, transmission, primarySwellIndex, swell1, swell2};
+  return {total, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2};
 }
 
 function personalProfile(spotId,sessions){
@@ -219,7 +233,7 @@ const FAVORITE_BOOST = 10;
 // week-ahead forecast timeline so both always agree on how a spot is scored
 // for the same conditions and the same surfer.
 function scoreSpot(spot, conditions, sessions, userSkill){
-  let {total:base, outOfRange, localH, transmission, primarySwellIndex, swell1, swell2} = staticScore(spot, conditions);
+  let {total:base, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2} = staticScore(spot, conditions);
   const profile = personalProfile(spot.id, sessions);
   let total = base;
   let tag = null;
@@ -244,7 +258,7 @@ function scoreSpot(spot, conditions, sessions, userSkill){
   const favoriteBoost = spot.favorite ? FAVORITE_BOOST : 0;
   total += favoriteBoost;
 
-  return {score: round(Math.max(0, Math.min(100, total))), tag, outOfRange, localH, transmission, primarySwellIndex, swell1, swell2, favoriteBoost};
+  return {score: round(Math.max(0, Math.min(100, total))), tag, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, favoriteBoost};
 }
 
 function barColor(s){ return s>=75?"var(--good)":s>=50?"var(--mid)":"var(--low)"; }
