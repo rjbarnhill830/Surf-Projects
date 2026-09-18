@@ -26,6 +26,23 @@ function isRecommendableDaylight(pt, daylightByDate){
   return minOfDay >= (day.sunriseMin - DAWN_BUFFER_MIN) && minOfDay <= (day.sunsetMin - DUSK_BUFFER_MIN);
 }
 
+// Needs at least an hour's notice to actually drive to a spot — a slot
+// that's already passed, or one just a few minutes out, isn't something
+// anyone can act on. Applies to every range (Today, 3-day, week), not just
+// "Today": a stale "an hour ago" slot at the start of a multi-day view is
+// just as useless as it would be in a same-day one.
+const MIN_LEAD_TIME_MIN = 60;
+
+// Converts a real Date into the same naive "YYYY-MM-DDTHH:MM" shape
+// Open-Meteo's timezone=auto timestamps use, so "now" can be compared
+// directly against pt.time as a plain string — mirrors the UTC-offset shift
+// trick sunTimesLocalMinutes uses in forecast-sources.js.
+function toLocalIsoMinutes(date, utcOffsetSeconds){
+  const local = new Date(date.getTime() + utcOffsetSeconds*1000);
+  const pad = n => String(n).padStart(2,'0');
+  return `${local.getUTCFullYear()}-${pad(local.getUTCMonth()+1)}-${pad(local.getUTCDate())}T${pad(local.getUTCHours())}:${pad(local.getUTCMinutes())}`;
+}
+
 // Marks which points start a new calendar day, so the grid can show a
 // visible day-boundary border — every daylight hour is shown (not sampled),
 // so the table is wider than its container across more than a day or two and
@@ -166,13 +183,18 @@ function showPointDetail(pt, spot, tideByStation, fallbackStationId, anchorEl){
   panel.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
-function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate){
+function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate, utcOffsetSeconds){
   const resultsEl = document.getElementById('forecastResults');
   resultsEl.innerHTML = '';
-  const timeline = rawTimeline.filter(pt=>isRecommendableDaylight(pt, daylightByDate));
+  // Recomputed fresh on every call (not baked in at fetch time) so cached
+  // results re-rendered later — e.g. tweaking the min-score filter minutes
+  // or hours after "Get forecast" — still drop whatever's since become
+  // unreachable, rather than freezing "now" at fetch time.
+  const reachableCutoff = toLocalIsoMinutes(new Date(Date.now() + MIN_LEAD_TIME_MIN*60000), utcOffsetSeconds || 0);
+  const timeline = rawTimeline.filter(pt=>pt.time>=reachableCutoff && isRecommendableDaylight(pt, daylightByDate));
 
   if(timeline.length===0){
-    resultsEl.innerHTML = '<p class="empty">No daylight hours in this window (too close to dusk, or the buffers ate the whole range) — try a longer range or check back tomorrow.</p>';
+    resultsEl.innerHTML = '<p class="empty">No reachable daylight hours in this window (too close to dusk, too soon to get there, or the buffers ate the whole range) — try a longer range or check back tomorrow.</p>';
     return;
   }
 
@@ -385,10 +407,10 @@ function initForecastSection(){
     document.getElementById('forecastResults').innerHTML = '';
     try{
       const spotsForTide = activeSpots.filter(s=>!s.excluded);
-      const {timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate} = await fetchForecastTimeline(loc, days, spotsForTide);
-      fcLastFetch = {timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate};
-      renderForecastResults(timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate);
-      statusEl.textContent = `Loaded ${timeline.length} hourly points for ${loc.label}, filtered to daylight (${DAWN_BUFFER_MIN}min before sunrise through ${DUSK_BUFFER_MIN}min before sunset).`;
+      const {timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate, utcOffsetSeconds} = await fetchForecastTimeline(loc, days, spotsForTide);
+      fcLastFetch = {timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate, utcOffsetSeconds};
+      renderForecastResults(timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate, utcOffsetSeconds);
+      statusEl.textContent = `Loaded ${timeline.length} hourly points for ${loc.label}, filtered to daylight (${DAWN_BUFFER_MIN}min before sunrise through ${DUSK_BUFFER_MIN}min before sunset) and at least ${MIN_LEAD_TIME_MIN}min from now.`;
     }catch(err){
       statusEl.textContent = `Couldn't load the forecast: ${err.message}`;
     }finally{
@@ -401,8 +423,8 @@ function initForecastSection(){
   // forecast" click.
   const rerenderFromCache = ()=>{
     if(!fcLastFetch) return;
-    const {timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate} = fcLastFetch;
-    renderForecastResults(timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate);
+    const {timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate, utcOffsetSeconds} = fcLastFetch;
+    renderForecastResults(timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate, utcOffsetSeconds);
   };
   document.getElementById('fcMinScore').addEventListener('input', rerenderFromCache);
   document.getElementById('fcSortMode').addEventListener('change', rerenderFromCache);

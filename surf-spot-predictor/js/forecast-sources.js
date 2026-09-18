@@ -317,6 +317,7 @@ async function fetchForecastTimeline(location, days, spots){
     fallbackStationId: location.tideStation || null,
     tideAvailable: !!fallback && !fallback.error,
     tideError: fallback ? fallback.error : null,
-    daylightByDate
+    daylightByDate,
+    utcOffsetSeconds
   };
 }
