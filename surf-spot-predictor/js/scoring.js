@@ -58,7 +58,15 @@ function swellComponentScores(spot, dir, height, period, transmission){
 
   const localH = Math.round(height*transmission*10)/10;
   let sizeScore;
-  if(localH<spot.minH){ sizeScore=Math.max(0,100-(spot.minH-localH)*20); outOfRange.push(`swell size (wants ${spot.minH}-${spot.maxH}ft)`); }
+  // Undersized swell is scored proportionally to the spot's own minimum
+  // (100 at minH, scaling straight down to 0 at zero swell) rather than a
+  // flat points-per-foot penalty — a flat rate let a near-flat swell (e.g.
+  // 0.5ft against a 2-6ft window) still score 90+, which doesn't reflect
+  // that under-minimum swell is heading toward "no rideable wave at all,"
+  // not just a minor miss. Oversized swell keeps the flat per-foot penalty:
+  // going over the top of the range still means real, ridable (if messier)
+  // waves, so it doesn't need the same proportional floor.
+  if(localH<spot.minH){ sizeScore = spot.minH>0 ? Math.max(0,100*(localH/spot.minH)) : 100; outOfRange.push(`swell size (wants ${spot.minH}-${spot.maxH}ft)`); }
   else if(localH>spot.maxH){ sizeScore=Math.max(0,100-(localH-spot.maxH)*15); outOfRange.push(`swell size (wants ${spot.minH}-${spot.maxH}ft)`); }
   else sizeScore=100;
 
@@ -68,10 +76,10 @@ function swellComponentScores(spot, dir, height, period, transmission){
   else periodScore=100;
 
   // Same relative weight direction/size/period carry in the overall score
-  // formula (0.22/0.13/0.09 of the total, i.e. 50%/29.5%/20.5% of just the
-  // swell portion) — used only to compare two swells against each other,
-  // not part of the spot's actual total score.
-  const blended = dirScore*0.5 + sizeScore*0.295 + periodScore*0.205;
+  // formula (0.30/0.15/0.09 of the total, i.e. ~55.5%/27.8%/16.7% of just
+  // the swell portion) — used only to compare two swells against each
+  // other, not part of the spot's actual total score.
+  const blended = dirScore*0.556 + sizeScore*0.278 + periodScore*0.167;
   return {dirScore, sizeScore, periodScore, localH, outOfRange, blended};
 }
 
@@ -138,17 +146,34 @@ function staticScore(spot,c){
   const windDirScore = Math.max(0,100-(windAngle/spot.windTol*100));
   const windScore = Math.max(0,Math.min(windDirScore,100-Math.max(0,c.windS-spot.maxWind)*8));
   const {dirScore, sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, transmission, primarySwellIndex, swell1, swell2} = checkRange(spot,c);
+
+  // Direction and size are pass/fail constraints on whether a spot is even
+  // working, not just two more weighted inputs to average in — a swell that
+  // isn't hitting the spot's direction window, or is way too small/too big,
+  // means the spot fundamentally isn't surfable there regardless of how
+  // clean the wind or tide are. Without this, a totally wrong swell
+  // direction plus perfect wind/tide could still land near 80/100. This
+  // gate multiplies the whole score down based on the worse of the two:
+  // 70+ (already "in range enough" per the direction/size scoring above)
+  // passes through unpenalized, scaling down to a 0.4x floor at a total
+  // mismatch on either axis.
+  const swellFit = Math.min(dirScore, sizeScore);
+  const swellGate = swellFit>=70 ? 1 : 0.4 + 0.6*(swellFit/70);
+
   let total;
   if(c.waveStyles && c.waveStyles.length>0){
-    // Wave-style preference gets 0.15, with the original six components
-    // scaled down proportionally (×0.85) to make room for it.
-    total = (dirScore*0.22 + sizeScore*0.13 + periodScore*0.09 + windScore*0.28 + tideScore*0.18 + tideDirScore*0.10)*0.85
+    // Wave-style preference gets 0.15, with the other six components scaled
+    // down proportionally (×0.85) to make room for it. Swell (dir+size+
+    // period) now carries more than half of that remaining 0.85, versus
+    // wind+tide+tideDir — a deliberate shift from the old 44/56 split so a
+    // spot's score actually depends on the swell being right, not mostly on
+    // wind and tide being right.
+    total = (dirScore*0.30 + sizeScore*0.15 + periodScore*0.09 + windScore*0.26 + tideScore*0.14 + tideDirScore*0.06)*0.85
       + styleScore*0.15;
   }else{
-    // No style preference set: identical to the pre-style formula, not an
-    // approximation of it — nothing changes until you opt in.
-    total = dirScore*0.22 + sizeScore*0.13 + periodScore*0.09 + windScore*0.28 + tideScore*0.18 + tideDirScore*0.10;
+    total = dirScore*0.30 + sizeScore*0.15 + periodScore*0.09 + windScore*0.26 + tideScore*0.14 + tideDirScore*0.06;
   }
+  total *= swellGate;
   return {total, outOfRange, localH, transmission, primarySwellIndex, swell1, swell2};
 }
 
