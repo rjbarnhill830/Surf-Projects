@@ -136,6 +136,21 @@ const WIND_ONSHORE_GATE_MAX_PENALTY = 0.65;
 const WIND_ONSHORE_GATE_POWER = 1.5;
 const WIND_ONSHORE_LABEL_ANGLE = 120;
 
+// A global, spot-independent reality check, on top of every per-spot
+// preference above: swell under ~2ft AND under ~16s period genuinely isn't
+// going to produce real surf anywhere, no matter how permissive a given
+// spot's own minH/minPeriod are configured. Both conditions have to hold —
+// a 2ft swell at an 18s+ period can still shoal up into real, rideable size
+// (period drives energy more than height, per the period-weighting work
+// above), and a short-period 4ft windswell is still real chop-driven surf,
+// just mediocre. It's specifically small AND short-period together that's
+// functionally flat. Gates the whole total, same pattern as the swell-fit/
+// wind-onshore gates, rather than trying to route it through minH/minPeriod
+// (which are per-spot and shouldn't be silently overridden).
+const GLOBAL_FLAT_HEIGHT_FT = 2;
+const GLOBAL_FLAT_PERIOD_SEC = 16;
+const GLOBAL_FLAT_GATE_FLOOR = 0.15;
+
 function tideFtToCategory(ft){
   if(ft<1.5) return 'low';
   if(ft>4) return 'high';
@@ -253,12 +268,15 @@ function swellComponentScores(spot, dir, height, period, transmission, tideFt){
     if(!outOfRange.some(m=>m.startsWith('period'))) outOfRange.push(`short period (${period}s carries little energy)`);
   }
 
+  const isGloballyFlat = localH<GLOBAL_FLAT_HEIGHT_FT && period<GLOBAL_FLAT_PERIOD_SEC;
+  if(isGloballyFlat) outOfRange.push(`essentially flat &mdash; ${localH}ft at ${period}s won't produce real surf anywhere`);
+
   // Same relative weight direction/size/period carry in the overall score
   // formula (0.28/0.14/0.18 of the total, i.e. ~46.7%/23.3%/30% of just
   // the swell portion) — used only to compare two swells against each
   // other, not part of the spot's actual total score.
   const blended = dirScore*0.467 + sizeScore*0.233 + periodScore*0.30;
-  return {dirScore, sizeScore, periodScore, localH, blockage: Math.round(blockage*100)/100, outOfRange, blended};
+  return {dirScore, sizeScore, periodScore, localH, blockage: Math.round(blockage*100)/100, outOfRange, blended, isGloballyFlat};
 }
 
 function checkRange(spot,c){
@@ -282,7 +300,7 @@ function checkRange(spot,c){
   const swell2 = hasSwell2 ? swellComponentScores(spot, c.swellDir2, c.swellH2, c.swellP2, transmission, c.tideFt) : null;
   const primarySwellIndex = (swell2 && swell2.blended > swell1.blended) ? 2 : 1;
   const primary = primarySwellIndex===2 ? swell2 : swell1;
-  const {dirScore, sizeScore, periodScore, localH, blockage} = primary;
+  const {dirScore, sizeScore, periodScore, localH, blockage, isGloballyFlat} = primary;
   // Cloned rather than reused directly — checkRange pushes more entries
   // (tide, tide direction) onto this below, and swell1/swell2 are returned
   // as-is for display, so they shouldn't pick up unrelated tide messages.
@@ -332,7 +350,7 @@ function checkRange(spot,c){
     styleScore = 40 + 60*(matches/wantedStyles.length);
   }
 
-  return {dirScore, sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, tideDisqualified};
+  return {dirScore, sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, tideDisqualified, isGloballyFlat};
 }
 
 function staticScore(spot,c){
@@ -353,7 +371,7 @@ function staticScore(spot,c){
   }
   const windScore = Math.max(0,Math.min(windDirScore,windSpeedScore));
 
-  const {dirScore, sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, tideDisqualified} = checkRange(spot,c);
+  const {dirScore, sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, tideDisqualified, isGloballyFlat} = checkRange(spot,c);
 
   if(c.windS>spot.maxWind) outOfRange.push(`wind speed (wants under ${spot.maxWind}mph)`);
   if(windAngle>spot.windTol){
@@ -399,6 +417,7 @@ function staticScore(spot,c){
   }
   total *= swellGate;
   total *= windGate;
+  if(isGloballyFlat) total *= GLOBAL_FLAT_GATE_FLOOR;
   return {total, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, tideDisqualified};
 }
 
