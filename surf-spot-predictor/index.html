@@ -16,49 +16,6 @@
   <p class="sub">Rule-based spot-matching model. Spot profiles are built from published surf-forecast guides; buoy and forecast readings come from live public data. Log real sessions below and the model nudges its scoring toward what's actually worked for you.</p>
 
   <section>
-    <h2>Search an area</h2>
-    <div class="panel">
-      <label>Region</label>
-      <select id="zoneSelect"></select>
-      <p class="buoynote" id="zoneNote"></p>
-    </div>
-  </section>
-
-  <section>
-    <h2>Your surfing</h2>
-    <div class="panel">
-      <div class="grid">
-        <div>
-          <label>Skill level</label>
-          <select id="userSkillLevel">
-            <option value="beginner">Beginner</option>
-            <option value="intermediate">Intermediate</option>
-            <option value="advanced" selected>Advanced</option>
-          </select>
-        </div>
-        <div>
-          <label>Wave style you're after (optional)</label>
-          <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;">
-            <label style="display:flex;align-items:center;gap:5px;font-size:13.5px;margin-bottom:0;">
-              <input type="checkbox" class="user-wavestyle" value="playful" style="width:auto;"> Playful
-            </label>
-            <label style="display:flex;align-items:center;gap:5px;font-size:13.5px;margin-bottom:0;">
-              <input type="checkbox" class="user-wavestyle" value="powerful" style="width:auto;"> Powerful
-            </label>
-            <label style="display:flex;align-items:center;gap:5px;font-size:13.5px;margin-bottom:0;">
-              <input type="checkbox" class="user-wavestyle" value="hollow" style="width:auto;"> Hollow
-            </label>
-            <label style="display:flex;align-items:center;gap:5px;font-size:13.5px;margin-bottom:0;">
-              <input type="checkbox" class="user-wavestyle" value="peaky" style="width:auto;"> Peaky
-            </label>
-          </div>
-        </div>
-      </div>
-      <p class="buoynote" style="margin-top:10px;">Skill level filters out spots that need more than you've got &mdash; set it honestly, it's a safety check, not just a label. Wave style is a soft nudge toward what you're in the mood for; leave all unchecked for no preference.</p>
-    </div>
-  </section>
-
-  <section>
     <h2>Forecast</h2>
     <p class="sub" style="margin-bottom:16px;">Pull a full swell + wind + tide outlook for a day, a few days, or the week ahead, and see which spot(s) are likely to be best and when.</p>
     <div class="panel">
@@ -93,6 +50,35 @@
           <input type="number" id="fcMaxDistance" min="0" step="5" placeholder="No limit">
         </div>
       </div>
+      <h3 class="fc-heading">Your surfing</h3>
+      <div class="grid">
+        <div>
+          <label>Skill level</label>
+          <select id="userSkillLevel">
+            <option value="beginner">Beginner</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="advanced" selected>Advanced</option>
+          </select>
+        </div>
+        <div>
+          <label>Wave style you're after (optional)</label>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;">
+            <label style="display:flex;align-items:center;gap:5px;font-size:13.5px;margin-bottom:0;">
+              <input type="checkbox" class="user-wavestyle" value="playful" style="width:auto;"> Playful
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13.5px;margin-bottom:0;">
+              <input type="checkbox" class="user-wavestyle" value="powerful" style="width:auto;"> Powerful
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13.5px;margin-bottom:0;">
+              <input type="checkbox" class="user-wavestyle" value="hollow" style="width:auto;"> Hollow
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13.5px;margin-bottom:0;">
+              <input type="checkbox" class="user-wavestyle" value="peaky" style="width:auto;"> Peaky
+            </label>
+          </div>
+        </div>
+      </div>
+      <p class="buoynote" style="margin-top:10px;">Skill level filters out spots that need more than you've got &mdash; set it honestly, it's a safety check, not just a label. Wave style is a soft nudge toward what you're in the mood for; leave all unchecked for no preference.</p>
       <div id="homeLocationPanel">
         <div class="buoybar" style="margin-top:12px;">
           <button class="primary" id="useMyLocation">Use my location</button>
@@ -356,6 +342,18 @@
       <p class="sub" id="hiddenNote" style="margin-bottom:12px;"></p>
       <div class="results" id="results"></div>
     </details>
+  </section>
+
+  <!-- Not needed day-to-day right now (only one zone is really in active
+       use) — kept for future multi-region development, tucked down here
+       instead of top-of-page real estate. -->
+  <section>
+    <h2>Search an area</h2>
+    <div class="panel">
+      <label>Region</label>
+      <select id="zoneSelect"></select>
+      <p class="buoynote" id="zoneNote"></p>
+    </div>
   </section>
 
   <p class="footer-note">This is a heuristic model, not a trained forecast &mdash; it encodes published spot guidance, not verified wave-by-wave outcomes. Session and spot-profile data is stored locally in this browser and isn't sent anywhere. Loading a live buoy or forecast reading does call NDBC's and Open-Meteo's public APIs directly from your browser.</p>
