@@ -276,29 +276,6 @@ function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, ti
   bestBox.appendChild(list);
   resultsEl.appendChild(bestBox);
 
-  fcCurrentSampledPoints = sampledPoints;
-  fcCurrentOrderedSpots = spotsToScore;
-  fcCurrentTideByStation = tideByStation;
-  fcCurrentFallbackStationId = fallbackStationId;
-
-  const dayStarts = dayStartFlags(sampledPoints);
-  const headerCellsHtml = sampledPoints.map((p,i)=>`<th${dayStarts[i]?' class="day-start"':''}>${formatForecastTime(p.time)}</th>`).join('');
-
-  const windBox = document.createElement('div');
-  windBox.innerHTML = '<h3 class="fc-heading">Wind timeline</h3>' + scrollHintHtml(sampledPoints)
-    + '<p class="buoynote" style="margin:0 0 6px;">Click any value for the full swell/wind/tide breakdown.</p>';
-  const windWrap = document.createElement('div');
-  windWrap.className = 'fc-scroll';
-  const windTable = document.createElement('table');
-  windTable.className = 'forecast-grid';
-  windTable.innerHTML = `
-    <thead><tr><th class="sticky-col"></th>${headerCellsHtml}</tr></thead>
-    <tbody><tr><td class="sticky-col">Wind</td>${sampledPoints.map((p,i)=>`<td class="fc-cell${dayStarts[i]?' day-start':''}" data-point-idx="${i}">${p.windS!=null?p.windS+'mph '+dirLabel(p.windDir):'–'}</td>`).join('')}</tr></tbody>
-  `;
-  windWrap.appendChild(windTable);
-  windBox.appendChild(windWrap);
-  resultsEl.appendChild(windBox);
-
   // "North to South"/"Closest to me" reuse the same lat/lon and home
   // location as the Ranked spots section's geo sort — a spot with no
   // coordinates (a custom spot added without them) sorts to the bottom
@@ -307,15 +284,6 @@ function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, ti
   const fcSortMode = fcSortModeEl ? fcSortModeEl.value : 'score';
   const sortModeLabel = fcSortMode==='northsouth' ? 'North to South' : fcSortMode==='distance' ? 'closest to you first' : null;
 
-  const gridBox = document.createElement('div');
-  gridBox.innerHTML = '<h3 class="fc-heading">Spot scores by time</h3>' + scrollHintHtml(sampledPoints)
-    + '<p class="buoynote" style="margin:0 0 6px;">Click any score for the full swell/wind/tide breakdown.'
-    + (minScore>0 ? ` Only showing scores &ge; ${minScore}.` : '')
-    + (sortModeLabel ? ` Rows sorted ${sortModeLabel}.` : '') + '</p>';
-  const gridWrap = document.createElement('div');
-  gridWrap.className = 'fc-scroll';
-  const grid = document.createElement('table');
-  grid.className = 'forecast-grid';
   // Rows below the min-score filter are dropped entirely (an all-dash row
   // adds nothing); the individual cells that fall short within a row that
   // does qualify are blanked out rather than the row being dropped, so a
@@ -336,6 +304,61 @@ function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, ti
       const pb = bestPerSpot[b.id] ? bestPerSpot[b.id].score : 0;
       return pb-pa;
     });
+
+  // Every row's score at every sampled time, computed once and reused for
+  // both the column-visibility check below and the cell rendering itself —
+  // avoids scoring each spot/time pair twice.
+  const scoresBySpot = {};
+  orderedSpots.forEach(spot=>{
+    scoresBySpot[spot.id] = sampledPoints.map(p=>{
+      const conditions = Object.assign({waveStyles: userWaveStyles}, p, tideForSpotAt(spot, p.time, tideByStation, fallbackStationId));
+      return scoreSpot(spot, conditions, sessionCache, userSkillLevel).score;
+    });
+  });
+
+  // A time column where not one qualifying spot clears minScore is dead
+  // weight — every cell in it would just be a dash — so it's dropped
+  // entirely rather than shown as a column of nothing. Wind timeline shares
+  // this same filtered column set so the two tables stay aligned.
+  const visibleIdx = sampledPoints
+    .map((_,i)=>i)
+    .filter(i => orderedSpots.some(spot => scoresBySpot[spot.id][i]>=minScore));
+  const visiblePoints = visibleIdx.map(i=>sampledPoints[i]);
+  const hiddenColumnCount = sampledPoints.length - visiblePoints.length;
+
+  fcCurrentSampledPoints = visiblePoints;
+  fcCurrentOrderedSpots = spotsToScore;
+  fcCurrentTideByStation = tideByStation;
+  fcCurrentFallbackStationId = fallbackStationId;
+
+  const dayStarts = dayStartFlags(visiblePoints);
+  const headerCellsHtml = visiblePoints.map((p,i)=>`<th${dayStarts[i]?' class="day-start"':''}>${formatForecastTime(p.time)}</th>`).join('');
+
+  const windBox = document.createElement('div');
+  windBox.innerHTML = '<h3 class="fc-heading">Wind timeline</h3>' + scrollHintHtml(visiblePoints)
+    + '<p class="buoynote" style="margin:0 0 6px;">Click any value for the full swell/wind/tide breakdown.'
+    + (hiddenColumnCount>0 ? ` ${hiddenColumnCount} time${hiddenColumnCount===1?'':'s'} hidden &mdash; no spot reaches a score of ${minScore} then.` : '') + '</p>';
+  const windWrap = document.createElement('div');
+  windWrap.className = 'fc-scroll';
+  const windTable = document.createElement('table');
+  windTable.className = 'forecast-grid';
+  windTable.innerHTML = `
+    <thead><tr><th class="sticky-col"></th>${headerCellsHtml}</tr></thead>
+    <tbody><tr><td class="sticky-col">Wind</td>${visiblePoints.map((p,i)=>`<td class="fc-cell${dayStarts[i]?' day-start':''}" data-point-idx="${i}">${p.windS!=null?p.windS+'mph '+dirLabel(p.windDir):'–'}</td>`).join('')}</tr></tbody>
+  `;
+  windWrap.appendChild(windTable);
+  windBox.appendChild(windWrap);
+  resultsEl.appendChild(windBox);
+
+  const gridBox = document.createElement('div');
+  gridBox.innerHTML = '<h3 class="fc-heading">Spot scores by time</h3>' + scrollHintHtml(visiblePoints)
+    + '<p class="buoynote" style="margin:0 0 6px;">Click any score for the full swell/wind/tide breakdown.'
+    + (minScore>0 ? ` Only showing scores &ge; ${minScore}.` : '')
+    + (sortModeLabel ? ` Rows sorted ${sortModeLabel}.` : '') + '</p>';
+  const gridWrap = document.createElement('div');
+  gridWrap.className = 'fc-scroll';
+  const grid = document.createElement('table');
+  grid.className = 'forecast-grid';
   if(orderedSpots.length===0){
     gridBox.innerHTML += `<p class="empty">No spot reaches a score of ${minScore} in this window &mdash; lower the min score filter to see the grid.</p>`;
   }else{
@@ -343,14 +366,13 @@ function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, ti
       <thead><tr><th class="sticky-col"></th>${headerCellsHtml}</tr></thead>
       <tbody>
         ${orderedSpots.map(spot=>{
-          const cells = sampledPoints.map((p,i)=>{
-            const conditions = Object.assign({waveStyles: userWaveStyles}, p, tideForSpotAt(spot, p.time, tideByStation, fallbackStationId));
-            const r = scoreSpot(spot, conditions, sessionCache, userSkillLevel);
+          const cells = visibleIdx.map((origIdx,i)=>{
+            const score = scoresBySpot[spot.id][origIdx];
             const dayCls = dayStarts[i]?' day-start':'';
-            if(r.score < minScore){
+            if(score < minScore){
               return `<td class="fc-cell${dayCls}" data-point-idx="${i}" data-spot-id="${spot.id}" style="background:var(--muted);color:var(--mid);">&ndash;</td>`;
             }
-            return `<td class="fc-cell${dayCls}" data-point-idx="${i}" data-spot-id="${spot.id}" style="background:${barColor(r.score)};color:#fff;">${r.score}</td>`;
+            return `<td class="fc-cell${dayCls}" data-point-idx="${i}" data-spot-id="${spot.id}" style="background:${barColor(score)};color:#fff;">${score}</td>`;
           }).join('');
           const groupHtml = spot.group ? `<div style="font-weight:400;text-transform:uppercase;letter-spacing:0.03em;font-size:10px;color:var(--muted);">${escapeHtml(spot.group)}</div>` : '';
           const favoriteHtml = spot.favorite ? ' &#9733;' : '';
