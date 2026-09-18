@@ -61,7 +61,7 @@ function blankCustomSpot(){
     dirMin:240, dirMax:300, facing:270, exposure:'moderate', minH:2, maxH:8,
     windDir:90, windTol:40, maxWind:15,
     tideMin:-2, tideMax:7, minPeriod:6, maxPeriod:22,
-    tideDirection:'either', transmission:1, bottomType:'unknown',
+    tideDirection:'either', tideRestrict:false, transmission:1, bottomType:'unknown',
     skillLevel:'intermediate', waveStyle:[],
     blurb:'', notes:''
   };
@@ -256,6 +256,12 @@ function spotFieldsGridHtml(id, cur){
           <option value="outgoing" ${cur.tideDirection==='outgoing'?'selected':''}>Outgoing (falling)</option>
         </select>
       </div>
+      <div style="display:flex;align-items:flex-end;padding-bottom:8px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;color:var(--ink);margin-bottom:0;">
+          <input type="checkbox" id="cfg-tiderestrict-${id}" style="width:auto;" ${cur.tideRestrict?'checked':''}>
+          Tide restrict &mdash; won't work outside this range
+        </label>
+      </div>
       <div><label>Offshore wind direction</label>${dirSelect('cfg-winddir-'+id,cur.windDir)}</div>
       <div><label>Wind tolerance (&deg;)</label><input type="number" id="cfg-windtol-${id}" min="10" max="90" value="${cur.windTol}"></div>
       <div><label>Max wind before blown out (mph)</label><input type="number" id="cfg-maxwind-${id}" min="5" max="40" value="${cur.maxWind}"></div>
@@ -297,6 +303,7 @@ function readFieldsFromForm(id){
     tideMin: +document.getElementById('cfg-tidemin-'+id).value,
     tideMax: +document.getElementById('cfg-tidemax-'+id).value,
     tideDirection: document.getElementById('cfg-tidedir-'+id).value,
+    tideRestrict: document.getElementById('cfg-tiderestrict-'+id).checked,
     windDir: +document.getElementById('cfg-winddir-'+id).value,
     windTol: +document.getElementById('cfg-windtol-'+id).value,
     maxWind: +document.getElementById('cfg-maxwind-'+id).value,
@@ -333,7 +340,7 @@ function renderConfigCards(){
     el.className='cfgcard';
     el.dataset.id = def.id;
     el.innerHTML=`
-      <summary>${escapeHtml(cur.name)}${cur.favorite?'<span class="customized" style="background:var(--mid);">&#9733; favorite</span>':''}${cur.group?`<span class="customized" style="background:var(--muted);">${escapeHtml(cur.group)}</span>`:''}${isEdited?'<span class="customized">edited</span>':''}${isExcluded?'<span class="customized" style="background:var(--low);">hidden</span>':''}<span class="chev">edit &#9662;</span></summary>
+      <summary>${escapeHtml(cur.name)}${cur.favorite?'<span class="customized" style="background:var(--mid);">&#9733; favorite</span>':''}${cur.group?`<span class="customized" style="background:var(--muted);">${escapeHtml(cur.group)}</span>`:''}${cur.tideRestrict?'<span class="customized" style="background:var(--deep2);">tide restricted</span>':''}${isEdited?'<span class="customized">edited</span>':''}${isExcluded?'<span class="customized" style="background:var(--low);">hidden</span>':''}<span class="chev">edit &#9662;</span></summary>
       <div style="margin-top:10px;">
         <label>Spot name</label>
         <input type="text" id="cfg-name-${def.id}" value="${escapeHtml(cur.name)}">
@@ -372,7 +379,7 @@ function renderConfigCards(){
     el.dataset.id = cur.id;
     el.dataset.customId = cur.id;
     el.innerHTML=`
-      <summary>${escapeHtml(cur.name)}${cur.favorite?'<span class="customized" style="background:var(--mid);">&#9733; favorite</span>':''}${cur.group?`<span class="customized" style="background:var(--muted);">${escapeHtml(cur.group)}</span>`:''}<span class="customized" style="background:var(--good);">custom</span>${cur.excluded?'<span class="customized" style="background:var(--low);">hidden</span>':''}<span class="chev">edit &#9662;</span></summary>
+      <summary>${escapeHtml(cur.name)}${cur.favorite?'<span class="customized" style="background:var(--mid);">&#9733; favorite</span>':''}${cur.group?`<span class="customized" style="background:var(--muted);">${escapeHtml(cur.group)}</span>`:''}${cur.tideRestrict?'<span class="customized" style="background:var(--deep2);">tide restricted</span>':''}<span class="customized" style="background:var(--good);">custom</span>${cur.excluded?'<span class="customized" style="background:var(--low);">hidden</span>':''}<span class="chev">edit &#9662;</span></summary>
       <div style="margin-top:10px;">
         <label>Spot name</label>
         <input type="text" id="cfg-name-${cur.id}" value="${escapeHtml(cur.name)}">

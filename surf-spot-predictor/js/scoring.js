@@ -129,9 +129,25 @@ function checkRange(spot,c){
   // tide — score it neutrally instead of coercing null to 0.
   const tideKnown = c.tideFt!=null;
   let tideScore;
+  // Tide restrict: some spots (shallow reef/sandbar breaks, launches that
+  // dry out, etc.) don't just score worse outside their tide window — they
+  // flat-out don't work at all. Rather than a soft per-foot penalty like
+  // the rest of the tide scoring, this flags an outright disqualification,
+  // applied unconditionally in scoreSpot() below (it overrides every other
+  // factor, including favorites). A null tideFt never disqualifies — no
+  // tide data isn't the same as a known-bad tide.
+  let tideDisqualified = false;
   if(!tideKnown) tideScore=100;
-  else if(c.tideFt<spot.tideMin){ tideScore=Math.max(0,100-(spot.tideMin-c.tideFt)*22); outOfRange.push(`tide (wants ${spot.tideMin}-${spot.tideMax}ft)`); }
-  else if(c.tideFt>spot.tideMax){ tideScore=Math.max(0,100-(c.tideFt-spot.tideMax)*22); outOfRange.push(`tide (wants ${spot.tideMin}-${spot.tideMax}ft)`); }
+  else if(c.tideFt<spot.tideMin){
+    tideScore=Math.max(0,100-(spot.tideMin-c.tideFt)*22);
+    if(spot.tideRestrict){ tideDisqualified=true; outOfRange.push(`tide restricted &mdash; won't work below ${spot.tideMin}ft`); }
+    else outOfRange.push(`tide (wants ${spot.tideMin}-${spot.tideMax}ft)`);
+  }
+  else if(c.tideFt>spot.tideMax){
+    tideScore=Math.max(0,100-(c.tideFt-spot.tideMax)*22);
+    if(spot.tideRestrict){ tideDisqualified=true; outOfRange.push(`tide restricted &mdash; won't work above ${spot.tideMax}ft`); }
+    else outOfRange.push(`tide (wants ${spot.tideMin}-${spot.tideMax}ft)`);
+  }
   else tideScore=100;
 
   const tidePref = spot.tideDirection || 'either';
@@ -152,14 +168,14 @@ function checkRange(spot,c){
     styleScore = 40 + 60*(matches/wantedStyles.length);
   }
 
-  return {dirScore, sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2};
+  return {dirScore, sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, tideDisqualified};
 }
 
 function staticScore(spot,c){
   const windAngle = angDiff(c.windDir,spot.windDir);
   const windDirScore = Math.max(0,100-(windAngle/spot.windTol*100));
   const windScore = Math.max(0,Math.min(windDirScore,100-Math.max(0,c.windS-spot.maxWind)*8));
-  const {dirScore, sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2} = checkRange(spot,c);
+  const {dirScore, sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, tideDisqualified} = checkRange(spot,c);
 
   // Direction, size, and period are pass/fail constraints on whether a spot
   // is even working, not just three more weighted inputs to average in — a
@@ -190,7 +206,7 @@ function staticScore(spot,c){
     total = dirScore*0.28 + sizeScore*0.14 + periodScore*0.18 + windScore*0.24 + tideScore*0.11 + tideDirScore*0.05;
   }
   total *= swellGate;
-  return {total, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2};
+  return {total, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, tideDisqualified};
 }
 
 function personalProfile(spotId,sessions){
@@ -233,7 +249,7 @@ const FAVORITE_BOOST = 10;
 // week-ahead forecast timeline so both always agree on how a spot is scored
 // for the same conditions and the same surfer.
 function scoreSpot(spot, conditions, sessions, userSkill){
-  let {total:base, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2} = staticScore(spot, conditions);
+  let {total:base, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, tideDisqualified} = staticScore(spot, conditions);
   const profile = personalProfile(spot.id, sessions);
   let total = base;
   let tag = null;
@@ -258,7 +274,16 @@ function scoreSpot(spot, conditions, sessions, userSkill){
   const favoriteBoost = spot.favorite ? FAVORITE_BOOST : 0;
   total += favoriteBoost;
 
-  return {score: round(Math.max(0, Math.min(100, total))), tag, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, favoriteBoost};
+  // Tide restrict is an absolute gate, not a weighted factor — some spots
+  // just don't break, or aren't safe, outside their tide window (shallow
+  // reef/sandbar exposure, a launch that dries out, etc.), and that holds
+  // regardless of how good swell/wind/skill/favorite status look. Overrides
+  // everything computed above, including the favorite boost.
+  if(tideDisqualified){
+    return {score: 0, tag, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, favoriteBoost: 0, tideDisqualified: true};
+  }
+
+  return {score: round(Math.max(0, Math.min(100, total))), tag, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, favoriteBoost, tideDisqualified: false};
 }
 
 function barColor(s){ return s>=75?"var(--good)":s>=50?"var(--mid)":"var(--low)"; }

@@ -102,7 +102,7 @@ function pointDetailHtml(pt, spot, tideByStation, fallbackStationId){
         ${r.favoriteBoost ? `<div class="note">&#9733; Favorite &mdash; scored +${r.favoriteBoost}.</div>` : ''}
         ${(r.transmission!==1 || r.blockage!==1) ? `<div class="note">${(r.primarySwellIndex===2?pt.swellH2:pt.swellH)}ft offshore &rarr; ~${r.localH}ft here (${[r.transmission!==1?`&times;${r.transmission} transmission`:null, r.blockage!==1?`&times;${r.blockage} off-angle blockage`:null].filter(Boolean).join(', ')})</div>` : ''}
         ${hasSwell2 ? `<div class="note">Scored on Swell ${r.primarySwellIndex} &mdash; the better-aligned of the two for this spot.</div>` : ''}
-        ${r.outOfRange.length ? `<div class="note" style="color:var(--mid);">Outside ideal range &mdash; ${r.outOfRange.join(', ')}.</div>` : ''}
+        ${r.tideDisqualified ? `<div class="note" style="color:var(--low);font-weight:600;">Disqualified &mdash; ${(r.outOfRange.find(m=>m.includes('tide restricted'))||'tide restricted')}.</div>` : r.outOfRange.length ? `<div class="note" style="color:var(--mid);">Outside ideal range &mdash; ${r.outOfRange.join(', ')}.</div>` : ''}
       </div>
     `;
   }
