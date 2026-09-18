@@ -53,6 +53,22 @@ const DIR_FALLOFF_DEGREES = 30;
 const BLOCKAGE_FALLOFF_DEGREES = 60;
 const BLOCKAGE_FLOOR = 0.35;
 
+// Wave energy scales with period (group velocity, and thus energy flux
+// delivered to the coast, increases with T) — under ~8s a "swell" is really
+// just local wind chop, which is real physics independent of any spot's own
+// configured minPeriod. Several wind-exposed spots set minPeriod as low as
+// 6s to describe the *shape* of the small windswell they normally see, not
+// to exempt short-period energy from being weak — so this is a second,
+// universal penalty on top of (not instead of) the per-spot relative check
+// below. The ramp is deliberately steep and compressed into just the 6-8s
+// band (not spread out from 0s): 8s+ is untouched, but by 6s periodScore
+// is already down to the floor, low enough to also pull in the swell-fit
+// gate below (which only bites under 70) rather than just nudging the
+// weighted average — "heavily penalized," not softly discouraged.
+const SHORT_PERIOD_FLOOR_SEC = 8;
+const SHORT_PERIOD_RAMP_START_SEC = 6;
+const SHORT_PERIOD_PENALTY_FLOOR = 0.2;
+
 function tideFtToCategory(ft){
   if(ft<1.5) return 'low';
   if(ft>4) return 'high';
@@ -88,6 +104,13 @@ function swellComponentScores(spot, dir, height, period, transmission){
   if(period<spot.minPeriod){ periodScore=Math.max(0,100-(spot.minPeriod-period)*15); outOfRange.push(`period (wants ${spot.minPeriod}-${spot.maxPeriod}s)`); }
   else if(period>spot.maxPeriod){ periodScore=Math.max(0,100-(period-spot.maxPeriod)*8); outOfRange.push(`period (wants ${spot.minPeriod}-${spot.maxPeriod}s)`); }
   else periodScore=100;
+
+  if(period < SHORT_PERIOD_FLOOR_SEC){
+    const t = Math.max(0, period - SHORT_PERIOD_RAMP_START_SEC) / (SHORT_PERIOD_FLOOR_SEC - SHORT_PERIOD_RAMP_START_SEC);
+    const shortPeriodFactor = SHORT_PERIOD_PENALTY_FLOOR + (1-SHORT_PERIOD_PENALTY_FLOOR)*t;
+    periodScore *= shortPeriodFactor;
+    if(!outOfRange.some(m=>m.startsWith('period'))) outOfRange.push(`short period (${period}s carries little energy)`);
+  }
 
   // Same relative weight direction/size/period carry in the overall score
   // formula (0.28/0.14/0.18 of the total, i.e. ~46.7%/23.3%/30% of just
