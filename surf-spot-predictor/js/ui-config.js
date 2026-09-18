@@ -168,9 +168,9 @@ function locationFieldHtml(id, cur){
 // the same group.
 function groupFieldHtml(id, cur){
   return `
-    <div>
-      <label>General location (optional)</label>
-      <input type="text" id="cfg-group-${id}" list="spotGroupList" value="${escapeHtml(cur.group||'')}" placeholder="e.g. Ocean Beach SF">
+    <div style="grid-column:span 2;min-width:220px;">
+      <label>General location</label>
+      <input type="text" id="cfg-group-${id}" list="spotGroupList" value="${escapeHtml(cur.group||'')}" placeholder="Optional &mdash; e.g. Ocean Beach SF, or another spot's name to join it">
     </div>
   `;
 }
@@ -184,7 +184,7 @@ const COUNTY_ORDER = ['Sonoma','Marin','San Francisco','San Mateo','Santa Cruz',
 function countyFieldHtml(id, cur){
   return `
     <div>
-      <label>County (optional)</label>
+      <label>County</label>
       <select id="cfg-county-${id}">
         <option value="" ${!cur.county?'selected':''}>Not set</option>
         ${COUNTY_ORDER.map(c=>`<option value="${c}" ${cur.county===c?'selected':''}>${c}</option>`).join('')}
@@ -530,6 +530,7 @@ function renderConfigCards(){
         }
       );
       await persistOverrides();
+      await linkNamedSpotToGroup(overrides[id].group, id);
       buildActiveSpots();
       renderConfigCards();
       refreshLogSpotOptions();
@@ -588,6 +589,7 @@ function renderConfigCards(){
         notes: document.getElementById('cfg-notes-'+id).value.trim()
       });
       await persistCustomSpots();
+      await linkNamedSpotToGroup(spot.group, id);
       buildActiveSpots();
       renderConfigCards();
       refreshLogSpotOptions();
@@ -614,6 +616,30 @@ function renderConfigCards(){
   box.querySelectorAll('.create-subspot').forEach(btn=>{
     btn.addEventListener('click', ()=>createSubSpot(btn.dataset.id));
   });
+}
+
+// If a spot's "General location" is set to text that exactly matches
+// another spot's current name (e.g. typing "Sharp Park" into Gazebos'
+// General location field, where "Sharp Park" is itself a real spot), that
+// other spot is tagged with the same group too — otherwise typing an
+// existing spot's name wouldn't actually join it, it'd just create a
+// same-named label pointing at nothing. Mirrors createSubSpot()'s "parent
+// joins its own new group" behavior, just triggered from the manual field
+// instead of the button. A group name that isn't any spot's name (like
+// "Ocean Beach SF" itself, once oceanbeach was renamed off of it) has no
+// match and is left as a plain label, same as before.
+async function linkNamedSpotToGroup(groupName, excludeId){
+  if(!groupName) return;
+  const target = activeSpots.find(s=>s.id!==excludeId && s.name.trim().toLowerCase()===groupName.trim().toLowerCase());
+  if(!target || target.group===groupName) return;
+  if(target.custom){
+    const cs = customSpots.find(s=>s.id===target.id);
+    if(cs) cs.group = groupName;
+    await persistCustomSpots();
+  }else{
+    overrides[target.id] = Object.assign({}, overrides[target.id]||{}, {group: groupName});
+    await persistOverrides();
+  }
 }
 
 // Creates a new custom spot that copies its parent's scoring criteria (
