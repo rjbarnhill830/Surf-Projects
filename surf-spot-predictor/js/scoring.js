@@ -112,6 +112,30 @@ const PERIOD_TAPER_FLOOR_AT_MAX = 70;
 const TIDE_MAXH_ADJUST_RANGE = 0.15;
 const TIDE_MAXPERIOD_ADJUST_RANGE = 0.15;
 
+// Wind speed gets the same "approaching max already pushes limits" taper as
+// swell size/period, rather than staying a flat 100 right up to maxWind. The
+// floor at maxWind is gentler than swell's (85 vs 80/70) — a spot right at
+// its usual wind ceiling is still generally rideable, just less clean, so it
+// doesn't warrant as steep a decline as an oversized/over-long swell.
+const WIND_SPEED_TAPER_START_FRACTION = 0.6;
+const WIND_SPEED_TAPER_FLOOR_AT_MAX = 85;
+
+// Wind direction quality (windDirScore below) is still just "how far from
+// this spot's own tolerance," unchanged — but that alone doesn't distinguish
+// a mild cross-shore breeze from a dead-onshore gale, since both already
+// floor at 0 once past the tolerance angle. This is a second, independent
+// gate keyed on the raw angle from the spot's ideal (offshore) direction —
+// 0° at offshore, 180° at dead onshore — regardless of the spot's own
+// windTol, since onshore-vs-offshore chop is a universal wind-direction
+// effect, not a per-spot-calibrated one. The curve is convex (POWER>1): it
+// stays close to 1 (no penalty) through most of the range and only drops
+// sharply approaching 180°, so cross-shore (~90°) lands clearly worse than
+// offshore but well short of onshore's much heavier penalty — "much worse
+// than the benefit of offshore," not just "as bad as sideshore."
+const WIND_ONSHORE_GATE_MAX_PENALTY = 0.65;
+const WIND_ONSHORE_GATE_POWER = 1.5;
+const WIND_ONSHORE_LABEL_ANGLE = 120;
+
 function tideFtToCategory(ft){
   if(ft<1.5) return 'low';
   if(ft>4) return 'high';
@@ -314,8 +338,28 @@ function checkRange(spot,c){
 function staticScore(spot,c){
   const windAngle = angDiff(c.windDir,spot.windDir);
   const windDirScore = Math.max(0,100-(windAngle/spot.windTol*100));
-  const windScore = Math.max(0,Math.min(windDirScore,100-Math.max(0,c.windS-spot.maxWind)*8));
+
+  let windSpeedScore;
+  if(c.windS<=spot.maxWind){
+    const taperStart = spot.maxWind*WIND_SPEED_TAPER_START_FRACTION;
+    if(c.windS>=taperStart && spot.maxWind>taperStart){
+      const t = (c.windS-taperStart)/(spot.maxWind-taperStart);
+      windSpeedScore = 100 - t*(100-WIND_SPEED_TAPER_FLOOR_AT_MAX);
+    }else{
+      windSpeedScore = 100;
+    }
+  }else{
+    windSpeedScore = Math.max(0, WIND_SPEED_TAPER_FLOOR_AT_MAX - (c.windS-spot.maxWind)*8);
+  }
+  const windScore = Math.max(0,Math.min(windDirScore,windSpeedScore));
+
   const {dirScore, sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, tideDisqualified} = checkRange(spot,c);
+
+  if(c.windS>spot.maxWind) outOfRange.push(`wind speed (wants under ${spot.maxWind}mph)`);
+  if(windAngle>spot.windTol){
+    if(windAngle>WIND_ONSHORE_LABEL_ANGLE) outOfRange.push(`onshore wind &mdash; choppy/blown out (wants offshore near ${dirLabel(spot.windDir)})`);
+    else outOfRange.push(`cross-shore wind (wants offshore near ${dirLabel(spot.windDir)})`);
+  }
 
   // Direction, size, and period are pass/fail constraints on whether a spot
   // is even working, not just three more weighted inputs to average in — a
@@ -330,6 +374,14 @@ function staticScore(spot,c){
   // any one axis.
   const swellFit = Math.min(dirScore, sizeScore, periodScore);
   const swellGate = swellFit>=70 ? 1 : 0.4 + 0.6*(swellFit/70);
+
+  // Onshore wind is much worse than offshore wind is good — see
+  // WIND_ONSHORE_GATE_* above — so this multiplies the whole total down
+  // based on the raw wind angle, independent of (and in addition to) the
+  // per-spot-tolerance-based windScore already folded into the weighted sum
+  // below.
+  const onshoreFraction = windAngle/180;
+  const windGate = 1 - WIND_ONSHORE_GATE_MAX_PENALTY*Math.pow(onshoreFraction, WIND_ONSHORE_GATE_POWER);
 
   let total;
   if(c.waveStyles && c.waveStyles.length>0){
@@ -346,6 +398,7 @@ function staticScore(spot,c){
     total = dirScore*0.28 + sizeScore*0.14 + periodScore*0.18 + windScore*0.24 + tideScore*0.11 + tideDirScore*0.05;
   }
   total *= swellGate;
+  total *= windGate;
   return {total, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, tideDisqualified};
 }
 
