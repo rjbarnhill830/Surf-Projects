@@ -87,6 +87,11 @@ function initLocationPanel(){
     userHomeLat = lat; userHomeLon = lon;
     refreshLocationPanelInputs();
     persistHomeLocation();
+    // Re-picks the Forecast section's Location dropdown to whichever buoy
+    // is now closest, so setting home location (via this button, the
+    // lat/lon inputs, or "Pick on map") always keeps it in sync rather than
+    // requiring a separate manual selection.
+    refreshForecastSectionLocations();
     render();
   }
 

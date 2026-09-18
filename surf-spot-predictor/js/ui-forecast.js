@@ -55,6 +55,27 @@ function refreshForecastSectionLocations(){
     opt.textContent = `${loc.label} (near ${loc.near})`;
     sel.appendChild(opt);
   });
+  // Default to whichever buoy/tide reference point is actually closest to
+  // the user's home location, if one's been set, instead of leaving it on
+  // the list's first entry — the right buoy for a forecast depends on where
+  // the user actually surfs, not on list order. Runs on every rebuild (init,
+  // zone switch, and whenever the home location itself changes — see
+  // applyHomeLocation in ui-preferences.js) so it always reflects the
+  // current zone's locations and the current home location together.
+  const note = document.getElementById('fcLocationNote');
+  if(userHomeLat!=null && userHomeLon!=null){
+    let best = null, bestDist = Infinity;
+    forecastLocations.forEach(loc=>{
+      const d = distanceMiles(userHomeLat, userHomeLon, loc.lat, loc.lon);
+      if(d<bestDist){ bestDist = d; best = loc; }
+    });
+    if(best){
+      sel.value = best.id;
+      if(note) note.textContent = `Auto-set to ${best.label} — the nearest to your home location (${Math.round(bestDist)}mi). Change anytime.`;
+    }
+  }else if(note){
+    note.textContent = 'Defaults to the nearest buoy once a home location is set below — change anytime.';
+  }
 }
 
 function resetForecastSection(){
