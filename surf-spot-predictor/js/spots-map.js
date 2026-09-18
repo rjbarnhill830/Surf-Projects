@@ -83,7 +83,7 @@ async function addCustomSpotAtLatLng(lat, lon){
   render();
   const card = document.querySelector(`.cfgcard[data-id="${spot.id}"]`);
   if(card){
-    card.open = true;
+    openCardAndAncestors(card);
     card.scrollIntoView({behavior:'smooth', block:'center'});
     const nameInput = document.getElementById('cfg-name-'+spot.id);
     if(nameInput){ nameInput.focus(); nameInput.select(); }
@@ -153,6 +153,6 @@ function renderSpotsOverviewMap(){
 function jumpToSpotCard(id){
   const card = document.querySelector(`.cfgcard[data-id="${id}"]`);
   if(!card) return;
-  card.open = true;
+  openCardAndAncestors(card);
   card.scrollIntoView({behavior:'smooth', block:'center'});
 }

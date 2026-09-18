@@ -105,6 +105,10 @@ button.primary:hover{background:var(--deep2);}
 .cfgcard-group{background:#f3ecd9;}
 .cfgcard-group>summary{font-family:Georgia,serif;font-weight:400;font-size:16px;}
 .cfggroup-children{display:flex;flex-direction:column;gap:12px;margin-top:14px;padding-left:14px;border-left:3px solid var(--line);}
+.cfgcard-county{background:var(--deep2);}
+.cfgcard-county>summary{font-family:Georgia,serif;font-weight:400;font-size:17px;color:var(--sand);}
+.cfgcard-county>summary .chev{color:var(--sand2);}
+.cfgcard-county>.cfggroup-children{border-left-color:rgba(233,223,199,0.3);}
 .section-collapsible>summary{cursor:pointer;list-style:none;}
 .section-collapsible>summary::-webkit-details-marker{display:none;}
 .section-collapsible>summary h2{display:flex;justify-content:space-between;align-items:center;}

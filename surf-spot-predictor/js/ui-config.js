@@ -2,6 +2,19 @@ let overrides = {};
 let customSpots = [];
 let activeSpots = defaultSpots;
 
+// A spot's own card can now sit two levels deep (county > group > spot),
+// so just opening the card itself isn't enough — a <details> nested inside
+// a still-closed ancestor <details> stays invisible regardless of its own
+// open state. Walks up through every ancestor and opens any <details> found
+// along the way, however many levels there are.
+function openCardAndAncestors(card){
+  let el = card;
+  while(el){
+    if(el.tagName === 'DETAILS') el.open = true;
+    el = el.parentElement;
+  }
+}
+
 function buildActiveSpots(){
   const built = defaultSpots.map(s=>{
     const o = overrides[s.id];
@@ -417,16 +430,24 @@ function renderConfigCards(){
   });
   const isCollapsibleGroup = g => !!g && groupCounts[g]>1 && countyOfGroup[g]!=null;
 
+  const countyTotals = {};
+  cards.forEach(c=>{ countyTotals[c.county||''] = (countyTotals[c.county||'']||0)+1; });
+
   let lastCounty;
+  let countyChildrenBox;
   const renderedGroups = new Set();
   cards.forEach(c=>{
     if(c.county !== lastCounty){
       lastCounty = c.county;
-      const heading = document.createElement('h3');
-      heading.className = 'fc-heading';
-      heading.style.marginTop = '22px';
-      heading.textContent = c.county || 'Other locations';
-      box.appendChild(heading);
+      const countyLabel = c.county || 'Other locations';
+      const countyWrapper = document.createElement('details');
+      countyWrapper.className = 'cfgcard cfgcard-county';
+      countyWrapper.style.marginTop = '22px';
+      countyWrapper.innerHTML = `<summary>${escapeHtml(countyLabel)}<span class="customized" style="background:var(--muted);">${countyTotals[c.county||'']} spots</span><span class="chev">expand &#9662;</span></summary>`;
+      countyChildrenBox = document.createElement('div');
+      countyChildrenBox.className = 'cfggroup-children';
+      countyWrapper.appendChild(countyChildrenBox);
+      box.appendChild(countyWrapper);
     }
     if(isCollapsibleGroup(c.group)){
       if(renderedGroups.has(c.group)) return; // its peaks were all appended when the group's first member was reached
@@ -439,9 +460,9 @@ function renderConfigCards(){
       childrenBox.className = 'cfggroup-children';
       groupCards.forEach(g=>childrenBox.appendChild(g.el));
       wrapper.appendChild(childrenBox);
-      box.appendChild(wrapper);
+      countyChildrenBox.appendChild(wrapper);
     }else{
-      box.appendChild(c.el);
+      countyChildrenBox.appendChild(c.el);
     }
   });
   renderSpotsOverviewMap();
@@ -639,9 +660,7 @@ async function createSubSpot(parentId){
 
   const card = document.querySelector(`.cfgcard[data-id="${sub.id}"]`);
   if(card){
-    const groupWrapper = card.closest('.cfgcard-group');
-    if(groupWrapper) groupWrapper.open = true;
-    card.open = true;
+    openCardAndAncestors(card);
     card.scrollIntoView({behavior:'smooth', block:'center'});
     const nameInput = document.getElementById('cfg-name-'+sub.id);
     if(nameInput){ nameInput.focus(); nameInput.select(); }
@@ -659,7 +678,7 @@ function initAddCustomSpotButton(){
     render();
     const card = document.querySelector(`.cfgcard[data-custom-id="${spot.id}"]`);
     if(card){
-      card.open = true;
+      openCardAndAncestors(card);
       card.scrollIntoView({behavior:'smooth', block:'center'});
       const nameInput = document.getElementById('cfg-name-'+spot.id);
       if(nameInput){ nameInput.focus(); nameInput.select(); }
