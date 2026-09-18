@@ -341,6 +341,7 @@ function renderConfigCards(){
       <div class="cfgbtns">
         <button class="primary savecfg" data-id="${def.id}">Save changes</button>
         <button class="resetcfg" data-id="${def.id}">Reset to default</button>
+        <button class="create-subspot" data-id="${def.id}">Create sub-spot&hellip;</button>
         <span class="cfgmsg" data-id="${def.id}" style="font-size:12px;color:var(--good);align-self:center;"></span>
       </div>
     `;
@@ -375,6 +376,7 @@ function renderConfigCards(){
       <div class="cfgbtns">
         <button class="primary savecustom" data-id="${cur.id}">Save changes</button>
         <button class="deletecustom" data-id="${cur.id}">Delete this spot</button>
+        <button class="create-subspot" data-id="${cur.id}">Create sub-spot&hellip;</button>
         <span class="cfgmsg" data-id="${cur.id}" style="font-size:12px;color:var(--good);align-self:center;"></span>
       </div>
     `;
@@ -553,6 +555,62 @@ function renderConfigCards(){
       render();
     });
   });
+
+  box.querySelectorAll('.create-subspot').forEach(btn=>{
+    btn.addEventListener('click', ()=>createSubSpot(btn.dataset.id));
+  });
+}
+
+// Creates a new custom spot that copies its parent's scoring criteria (
+// direction window, size/period/tide ranges, wind, bottom type, skill
+// level, wave style, location) as a starting point — name, blurb and
+// notes are left blank since those are specific to the spot being
+// described, not "criteria" to inherit. If the parent doesn't already
+// belong to a group, it's given one now (named after itself) so it joins
+// its own new sub-spot as a group, the same way Ocean Beach SF's original
+// entry carries the "Ocean Beach SF" group tag alongside its peaks.
+async function createSubSpot(parentId){
+  const parent = activeSpots.find(s=>s.id===parentId);
+  if(!parent) return;
+
+  let groupName = parent.group;
+  if(!groupName){
+    groupName = parent.name;
+    if(parent.custom){
+      const cs = customSpots.find(s=>s.id===parentId);
+      if(cs) cs.group = groupName;
+      await persistCustomSpots();
+    }else{
+      overrides[parentId] = Object.assign({}, overrides[parentId]||{}, {group: groupName});
+      await persistOverrides();
+    }
+  }
+
+  const sub = Object.assign({}, parent, {
+    id: 'custom-'+Date.now().toString(36),
+    name: parent.name+' — new peak',
+    custom: true,
+    excluded: false,
+    group: groupName,
+    waveStyle: [...(parent.waveStyle||[])],
+    blurb: '', notes: ''
+  });
+  customSpots.push(sub);
+  await persistCustomSpots();
+  buildActiveSpots();
+  renderConfigCards();
+  refreshLogSpotOptions();
+  render();
+
+  const card = document.querySelector(`.cfgcard[data-id="${sub.id}"]`);
+  if(card){
+    const groupWrapper = card.closest('.cfgcard-group');
+    if(groupWrapper) groupWrapper.open = true;
+    card.open = true;
+    card.scrollIntoView({behavior:'smooth', block:'center'});
+    const nameInput = document.getElementById('cfg-name-'+sub.id);
+    if(nameInput){ nameInput.focus(); nameInput.select(); }
+  }
 }
 
 function initAddCustomSpotButton(){
