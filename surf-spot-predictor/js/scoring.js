@@ -76,10 +76,10 @@ function swellComponentScores(spot, dir, height, period, transmission){
   else periodScore=100;
 
   // Same relative weight direction/size/period carry in the overall score
-  // formula (0.30/0.15/0.09 of the total, i.e. ~55.5%/27.8%/16.7% of just
+  // formula (0.28/0.14/0.18 of the total, i.e. ~46.7%/23.3%/30% of just
   // the swell portion) — used only to compare two swells against each
   // other, not part of the spot's actual total score.
-  const blended = dirScore*0.556 + sizeScore*0.278 + periodScore*0.167;
+  const blended = dirScore*0.467 + sizeScore*0.233 + periodScore*0.30;
   return {dirScore, sizeScore, periodScore, localH, outOfRange, blended};
 }
 
@@ -147,31 +147,33 @@ function staticScore(spot,c){
   const windScore = Math.max(0,Math.min(windDirScore,100-Math.max(0,c.windS-spot.maxWind)*8));
   const {dirScore, sizeScore, periodScore, tideScore, tideDirScore, styleScore, outOfRange, localH, transmission, primarySwellIndex, swell1, swell2} = checkRange(spot,c);
 
-  // Direction and size are pass/fail constraints on whether a spot is even
-  // working, not just two more weighted inputs to average in — a swell that
-  // isn't hitting the spot's direction window, or is way too small/too big,
-  // means the spot fundamentally isn't surfable there regardless of how
-  // clean the wind or tide are. Without this, a totally wrong swell
-  // direction plus perfect wind/tide could still land near 80/100. This
-  // gate multiplies the whole score down based on the worse of the two:
-  // 70+ (already "in range enough" per the direction/size scoring above)
-  // passes through unpenalized, scaling down to a 0.4x floor at a total
-  // mismatch on either axis.
-  const swellFit = Math.min(dirScore, sizeScore);
+  // Direction, size, and period are pass/fail constraints on whether a spot
+  // is even working, not just three more weighted inputs to average in — a
+  // swell that isn't hitting the spot's direction window, is way too
+  // small/too big, or is short-period wind slop instead of organized
+  // groundswell, means the spot fundamentally isn't surfable there
+  // regardless of how clean the wind or tide are. Without this, a totally
+  // wrong swell direction plus perfect wind/tide could still land near
+  // 80/100. This gate multiplies the whole score down based on the worst of
+  // the three: 70+ (already "in range enough" per the scoring above) passes
+  // through unpenalized, scaling down to a 0.4x floor at a total mismatch on
+  // any one axis.
+  const swellFit = Math.min(dirScore, sizeScore, periodScore);
   const swellGate = swellFit>=70 ? 1 : 0.4 + 0.6*(swellFit/70);
 
   let total;
   if(c.waveStyles && c.waveStyles.length>0){
     // Wave-style preference gets 0.15, with the other six components scaled
     // down proportionally (×0.85) to make room for it. Swell (dir+size+
-    // period) now carries more than half of that remaining 0.85, versus
-    // wind+tide+tideDir — a deliberate shift from the old 44/56 split so a
-    // spot's score actually depends on the swell being right, not mostly on
-    // wind and tide being right.
-    total = (dirScore*0.30 + sizeScore*0.15 + periodScore*0.09 + windScore*0.26 + tideScore*0.14 + tideDirScore*0.06)*0.85
+    // period) now carries 60% of that remaining 0.85, versus wind+tide+
+    // tideDir — a deliberate shift from the old 44/56 split, with period
+    // specifically weighted up (0.09 -> 0.18) so clean long-period
+    // groundswell actually scores better than short-period wind slop of the
+    // same size and direction.
+    total = (dirScore*0.28 + sizeScore*0.14 + periodScore*0.18 + windScore*0.24 + tideScore*0.11 + tideDirScore*0.05)*0.85
       + styleScore*0.15;
   }else{
-    total = dirScore*0.30 + sizeScore*0.15 + periodScore*0.09 + windScore*0.26 + tideScore*0.14 + tideDirScore*0.06;
+    total = dirScore*0.28 + sizeScore*0.14 + periodScore*0.18 + windScore*0.24 + tideScore*0.11 + tideDirScore*0.05;
   }
   total *= swellGate;
   return {total, outOfRange, localH, transmission, primarySwellIndex, swell1, swell2};
