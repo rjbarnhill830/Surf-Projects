@@ -464,13 +464,24 @@ const norcalSpots = [
 //     High -49min/+0.1ft, Low -35min/+0ft — used directly by the SF/Pacifica
 //     ocean-facing spots since it's more localized than the SF station itself
 //   9414958 Bolinas — Reference — used by the Stinson/Bolinas cluster
+//   9413745 Santa Cruz, Monterey Bay — Reference — Santa Cruz coast fallback
+//   9413450 Monterey — Reference — Monterey coast fallback
 const norcalForecastLocations = [
   { id:"bodega", label:"Bodega Bay", ndbcStation:"46013", tideStation:"9415020", lat:38.246, lon:-123.301,
     near:"Salmon Creek, Doran, Dillon" },
   { id:"sf", label:"San Francisco", ndbcStation:"46026", tideStation:"9414290", lat:37.759, lon:-122.833,
     near:"Stinson, Pacifica, Ocean Beach, Rockaway" },
   { id:"hmb", label:"Half Moon Bay", ndbcStation:"46012", tideStation:"9414131", lat:37.356, lon:-122.881,
-    near:"Waddell, Cronkite, Davenport, Palomarin, Montara, San Gregorio, Tunitas" }
+    near:"Cronkite, Palomarin, Montara, San Gregorio, Tunitas" },
+  // Fills a real gap: the 25 Santa Cruz/Monterey spots (~38% of the NorCal
+  // set) previously had no closer option than Half Moon Bay, ~25-35mi north
+  // of most of them — this buoy sits right in Monterey Bay instead. NDBC
+  // 46042 "Monterey", 27nm WNW of Monterey (36.787N 122.408W); tide station
+  // defaults to Santa Cruz (9413745) since more of this zone's spots already
+  // override to it than to Monterey (9413450), though most have their own
+  // explicit tideStation regardless.
+  { id:"montereybay", label:"Monterey Bay", ndbcStation:"46042", tideStation:"9413745", lat:36.787, lon:-122.408,
+    near:"Steamer Lane, Pleasure Point, Capitola, Asilomar" }
 ];
 
 const SPOT_OFFSHORE = {
