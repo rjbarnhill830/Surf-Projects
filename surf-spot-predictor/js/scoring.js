@@ -69,6 +69,20 @@ const SHORT_PERIOD_FLOOR_SEC = 8;
 const SHORT_PERIOD_RAMP_START_SEC = 6;
 const SHORT_PERIOD_PENALTY_FLOOR = 0.2;
 
+// Oversized swell (or over-long period) isn't just "messier but still
+// ridable" once it's well past a spot's own max — a mellow beach break
+// rated up to 6ft/13s genuinely closes out and becomes overloaded/unsurfable
+// at double that, while the same absolute excess barely registers at a
+// big-wave spot rated up to 15ft/20s. So the penalty scales relative to the
+// spot's own max (excess ÷ max), not a flat rate — a spot with a low
+// ceiling gets hit much harder by the same relative overshoot. Crossing
+// OVERLOAD_EXCESS_RATIO (50% over max) is flagged with an explicit note
+// rather than just a lower number, since "outside ideal range" undersells
+// an actually-overloaded spot.
+const OVERSIZE_PENALTY_RATE = 130;
+const OVERPERIOD_PENALTY_RATE = 130;
+const OVERLOAD_EXCESS_RATIO = 0.5;
+
 function tideFtToCategory(ft){
   if(ft<1.5) return 'low';
   if(ft>4) return 'high';
@@ -88,22 +102,43 @@ function swellComponentScores(spot, dir, height, period, transmission){
 
   const localH = Math.round(height*transmission*blockage*10)/10;
   let sizeScore;
+  let sizeOverloaded = false;
   // Undersized swell is scored proportionally to the spot's own minimum
   // (100 at minH, scaling straight down to 0 at zero swell) rather than a
   // flat points-per-foot penalty — a flat rate let a near-flat swell (e.g.
   // 0.5ft against a 2-6ft window) still score 90+, which doesn't reflect
   // that under-minimum swell is heading toward "no rideable wave at all,"
-  // not just a minor miss. Oversized swell keeps the flat per-foot penalty:
-  // going over the top of the range still means real, ridable (if messier)
-  // waves, so it doesn't need the same proportional floor.
+  // not just a minor miss. Oversized swell is likewise scored proportionally
+  // to the spot's own maximum (see OVERSIZE_PENALTY_RATE above) rather than
+  // a flat rate that let any spot absorb the same few extra feet the same
+  // way — a mellow beach break blows out and closes out well before a
+  // big-wave spot even notices the same absolute excess.
   if(localH<spot.minH){ sizeScore = spot.minH>0 ? Math.max(0,100*(localH/spot.minH)) : 100; outOfRange.push(`swell size (wants ${spot.minH}-${spot.maxH}ft)`); }
-  else if(localH>spot.maxH){ sizeScore=Math.max(0,100-(localH-spot.maxH)*15); outOfRange.push(`swell size (wants ${spot.minH}-${spot.maxH}ft)`); }
+  else if(localH>spot.maxH){
+    const excessRatio = spot.maxH>0 ? (localH-spot.maxH)/spot.maxH : 0;
+    sizeScore = Math.max(0, 100 - excessRatio*OVERSIZE_PENALTY_RATE);
+    if(excessRatio >= OVERLOAD_EXCESS_RATIO) sizeOverloaded = true;
+    else outOfRange.push(`swell size (wants ${spot.minH}-${spot.maxH}ft)`);
+  }
   else sizeScore=100;
 
   let periodScore;
+  let periodOverloaded = false;
   if(period<spot.minPeriod){ periodScore=Math.max(0,100-(spot.minPeriod-period)*15); outOfRange.push(`period (wants ${spot.minPeriod}-${spot.maxPeriod}s)`); }
-  else if(period>spot.maxPeriod){ periodScore=Math.max(0,100-(period-spot.maxPeriod)*8); outOfRange.push(`period (wants ${spot.minPeriod}-${spot.maxPeriod}s)`); }
+  else if(period>spot.maxPeriod){
+    const excessRatio = spot.maxPeriod>0 ? (period-spot.maxPeriod)/spot.maxPeriod : 0;
+    periodScore = Math.max(0, 100 - excessRatio*OVERPERIOD_PENALTY_RATE);
+    if(excessRatio >= OVERLOAD_EXCESS_RATIO) periodOverloaded = true;
+    else outOfRange.push(`period (wants ${spot.minPeriod}-${spot.maxPeriod}s)`);
+  }
   else periodScore=100;
+
+  if(sizeOverloaded || periodOverloaded){
+    const parts = [];
+    if(sizeOverloaded) parts.push('swell too large');
+    if(periodOverloaded) parts.push('period too long');
+    outOfRange.push(`spot will be overloaded and/or unsurfable &mdash; ${parts.join(' and ')} for this spot`);
+  }
 
   if(period < SHORT_PERIOD_FLOOR_SEC){
     const t = Math.max(0, period - SHORT_PERIOD_RAMP_START_SEC) / (SHORT_PERIOD_FLOOR_SEC - SHORT_PERIOD_RAMP_START_SEC);
