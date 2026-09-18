@@ -70,12 +70,13 @@ function render(){
     div.innerHTML=`
       <div class="rank">${i+1}</div>
       <div class="body">
-        <div class="name">${r.spot.name}${r.spot.bottomType&&r.spot.bottomType!=='unknown'?`<span class="badge" style="background:var(--muted);">${BOTTOM_TYPE_LABELS[r.spot.bottomType]}</span>`:''}${r.spot.skillLevel?`<span class="badge" style="background:${skillBadgeColor(r.spot.skillLevel)};">${SKILL_LEVEL_LABELS[r.spot.skillLevel]}</span>`:''}${r.tag?`<span class="badge">${r.tag} rated sessions</span>`:''}</div>
+        <div class="name">${r.spot.name}${r.spot.favorite?'<span class="badge" style="background:var(--mid);">&#9733; favorite</span>':''}${r.spot.bottomType&&r.spot.bottomType!=='unknown'?`<span class="badge" style="background:var(--muted);">${BOTTOM_TYPE_LABELS[r.spot.bottomType]}</span>`:''}${r.spot.skillLevel?`<span class="badge" style="background:${skillBadgeColor(r.spot.skillLevel)};">${SKILL_LEVEL_LABELS[r.spot.skillLevel]}</span>`:''}${r.tag?`<span class="badge">${r.tag} rated sessions</span>`:''}</div>
         ${r.spot.group ? `<div class="note" style="text-transform:uppercase;letter-spacing:0.03em;font-size:11px;margin-top:-2px;">${escapeHtml(r.spot.group)}</div>` : ''}
         ${r.distanceMi!=null ? `<div class="note">${Math.round(r.distanceMi)} mi ${dirLabel(r.bearing)} of you (straight-line)</div>` : ''}
         <div class="bar"><i style="width:${r.score}%;background:${barColor(r.score)}"></i></div>
         <div class="note">${r.spot.blurb}</div>
         ${r.spot.notes ? `<div class="note" style="font-style:italic;margin-top:3px;">${r.spot.notes}</div>` : ''}
+        ${r.favoriteBoost ? `<div class="note" style="margin-top:3px;">&#9733; Favorite &mdash; scored +${r.favoriteBoost}.</div>` : ''}
         ${r.transmission!==1 ? `<div class="note" style="margin-top:3px;">${c.swellH}ft offshore &rarr; ~${r.localH}ft here (&times;${r.transmission})</div>` : ''}
         ${r.swell2 && r.primarySwellIndex===2 ? `<div class="note" style="margin-top:3px;">Scored on Swell 2 (${c.swellH2}ft @ ${c.swellP2}s ${dirLabel(c.swellDir2)}) &mdash; better aligned for this spot than Swell 1.</div>` : ''}
         ${r.outOfRange.length ? `<div class="note" style="color:var(--mid);margin-top:3px;">Outside ideal range &mdash; ${r.outOfRange.join(', ')}.</div>` : ''}

@@ -42,6 +42,7 @@ function blankCustomSpot(){
     name: 'New spot',
     custom: true,
     excluded: false,
+    favorite: false,
     lat: null, lon: null,
     group: '', county: '',
     dirMin:240, dirMax:300, facing:270, exposure:'moderate', minH:2, maxH:8,
@@ -319,7 +320,7 @@ function renderConfigCards(){
     el.className='cfgcard';
     el.dataset.id = def.id;
     el.innerHTML=`
-      <summary>${escapeHtml(cur.name)}${cur.group?`<span class="customized" style="background:var(--muted);">${escapeHtml(cur.group)}</span>`:''}${isEdited?'<span class="customized">edited</span>':''}${isExcluded?'<span class="customized" style="background:var(--low);">hidden</span>':''}<span class="chev">edit &#9662;</span></summary>
+      <summary>${escapeHtml(cur.name)}${cur.favorite?'<span class="customized" style="background:var(--mid);">&#9733; favorite</span>':''}${cur.group?`<span class="customized" style="background:var(--muted);">${escapeHtml(cur.group)}</span>`:''}${isEdited?'<span class="customized">edited</span>':''}${isExcluded?'<span class="customized" style="background:var(--low);">hidden</span>':''}<span class="chev">edit &#9662;</span></summary>
       <div style="margin-top:10px;">
         <label>Spot name</label>
         <input type="text" id="cfg-name-${def.id}" value="${escapeHtml(cur.name)}">
@@ -327,6 +328,10 @@ function renderConfigCards(){
       <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;margin-top:10px;">
         <input type="checkbox" class="include-toggle" data-id="${def.id}" style="width:auto;" ${isExcluded?'':'checked'}>
         Include this spot in recommendations
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;margin-top:6px;">
+        <input type="checkbox" class="favorite-toggle" data-id="${def.id}" style="width:auto;" ${cur.favorite?'checked':''}>
+        &#9733; Favorite this spot (boosts its score by ${FAVORITE_BOOST} points)
       </label>
       ${spotFieldsGridHtml(def.id, cur)}
       <p class="buoynote" style="margin-top:8px;">Conditions outside these swell size, period, direction or tide ranges lower this spot's score and get flagged in the ranking &mdash; the spot still shows up as an option, just marked as outside its ideal range. Set which way the beach faces and how exposed it is, then click "Set window from facing" for a physically reasonable starting window &mdash; a beach can only take swell from its open-ocean side. Fine-tune from there with the compass checkboxes or exact degrees; the window can cross 0&deg;/360&deg; (e.g. NW through NE). Direction scores fall off over the 30&deg; just past either edge, then hits zero. Transmission scales an offshore/buoy swell height down (or up) to estimate what actually breaks here &mdash; leave at 1 until you've compared logged sessions against a forecast to calibrate it. Bottom type is informational plus the basis for the min/max period range: reefs and points generally want a longer, more organized groundswell to wrap cleanly, while typical beach breaks work fine on shorter/mid period &mdash; adjust the period range directly if a spot doesn't follow that rule (Ocean Beach and Supertubos are beach breaks that are tuned as exceptions).</p>
@@ -354,7 +359,7 @@ function renderConfigCards(){
     el.dataset.id = cur.id;
     el.dataset.customId = cur.id;
     el.innerHTML=`
-      <summary>${escapeHtml(cur.name)}${cur.group?`<span class="customized" style="background:var(--muted);">${escapeHtml(cur.group)}</span>`:''}<span class="customized" style="background:var(--good);">custom</span>${cur.excluded?'<span class="customized" style="background:var(--low);">hidden</span>':''}<span class="chev">edit &#9662;</span></summary>
+      <summary>${escapeHtml(cur.name)}${cur.favorite?'<span class="customized" style="background:var(--mid);">&#9733; favorite</span>':''}${cur.group?`<span class="customized" style="background:var(--muted);">${escapeHtml(cur.group)}</span>`:''}<span class="customized" style="background:var(--good);">custom</span>${cur.excluded?'<span class="customized" style="background:var(--low);">hidden</span>':''}<span class="chev">edit &#9662;</span></summary>
       <div style="margin-top:10px;">
         <label>Spot name</label>
         <input type="text" id="cfg-name-${cur.id}" value="${escapeHtml(cur.name)}">
@@ -362,6 +367,10 @@ function renderConfigCards(){
       <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;margin-top:10px;">
         <input type="checkbox" class="include-toggle-custom" data-id="${cur.id}" style="width:auto;" ${cur.excluded?'':'checked'}>
         Include this spot in recommendations
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;margin-top:6px;">
+        <input type="checkbox" class="favorite-toggle-custom" data-id="${cur.id}" style="width:auto;" ${cur.favorite?'checked':''}>
+        &#9733; Favorite this spot (boosts its score by ${FAVORITE_BOOST} points)
       </label>
       ${spotFieldsGridHtml(cur.id, cur)}
       <p class="buoynote" style="margin-top:8px;">Set these from whatever you've heard works here &mdash; a published guide, a friend's report, a webcam check. Log a session or two here and the model will start blending in what you actually observe.</p>
@@ -474,6 +483,18 @@ function renderConfigCards(){
     });
   });
 
+  box.querySelectorAll('.favorite-toggle').forEach(chk=>{
+    chk.addEventListener('click', e=>e.stopPropagation());
+    chk.addEventListener('change', async ()=>{
+      const id = chk.dataset.id;
+      overrides[id] = Object.assign({}, overrides[id]||{}, {favorite: chk.checked});
+      await persistOverrides();
+      buildActiveSpots();
+      renderConfigCards();
+      render();
+    });
+  });
+
   box.querySelectorAll('.savecfg').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const id = btn.dataset.id;
@@ -514,6 +535,19 @@ function renderConfigCards(){
       const id = chk.dataset.id;
       const spot = customSpots.find(s=>s.id===id);
       if(spot) spot.excluded = !chk.checked;
+      await persistCustomSpots();
+      buildActiveSpots();
+      renderConfigCards();
+      render();
+    });
+  });
+
+  box.querySelectorAll('.favorite-toggle-custom').forEach(chk=>{
+    chk.addEventListener('click', e=>e.stopPropagation());
+    chk.addEventListener('change', async ()=>{
+      const id = chk.dataset.id;
+      const spot = customSpots.find(s=>s.id===id);
+      if(spot) spot.favorite = chk.checked;
       await persistCustomSpots();
       buildActiveSpots();
       renderConfigCards();
@@ -591,6 +625,7 @@ async function createSubSpot(parentId){
     name: parent.name+' — new peak',
     custom: true,
     excluded: false,
+    favorite: false,
     group: groupName,
     waveStyle: [...(parent.waveStyle||[])],
     blurb: '', notes: ''

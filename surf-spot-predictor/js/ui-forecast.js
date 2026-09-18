@@ -98,7 +98,8 @@ function pointDetailHtml(pt, spot, tideByStation, fallbackStationId){
     const r = scoreSpot(spot, conditions, sessionCache, userSkillLevel);
     scoreSection = `
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);">
-        <b>${spot.name}</b>${spot.group ? ` <span class="note" style="display:inline;">(${escapeHtml(spot.group)})</span>` : ''} &mdash; <span style="color:${barColor(r.score)};font-weight:700;">${r.score}</span>
+        <b>${spot.name}</b>${spot.favorite ? ' <span class="badge" style="background:var(--mid);">&#9733; favorite</span>' : ''}${spot.group ? ` <span class="note" style="display:inline;">(${escapeHtml(spot.group)})</span>` : ''} &mdash; <span style="color:${barColor(r.score)};font-weight:700;">${r.score}</span>
+        ${r.favoriteBoost ? `<div class="note">&#9733; Favorite &mdash; scored +${r.favoriteBoost}.</div>` : ''}
         ${r.transmission!==1 ? `<div class="note">${(r.primarySwellIndex===2?pt.swellH2:pt.swellH)}ft offshore &rarr; ~${r.localH}ft here (&times;${r.transmission})</div>` : ''}
         ${hasSwell2 ? `<div class="note">Scored on Swell ${r.primarySwellIndex} &mdash; the better-aligned of the two for this spot.</div>` : ''}
         ${r.outOfRange.length ? `<div class="note" style="color:var(--mid);">Outside ideal range &mdash; ${r.outOfRange.join(', ')}.</div>` : ''}
@@ -219,7 +220,7 @@ function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, ti
     div.style.cursor = 'pointer';
     div.innerHTML = `
       <div class="body">
-        <div class="name">${pick.spot.name}${pick.spot.bottomType&&pick.spot.bottomType!=='unknown'?`<span class="badge" style="background:var(--muted);">${BOTTOM_TYPE_LABELS[pick.spot.bottomType]}</span>`:''}${pick.spot.skillLevel?`<span class="badge" style="background:${skillBadgeColor(pick.spot.skillLevel)};">${SKILL_LEVEL_LABELS[pick.spot.skillLevel]}</span>`:''}</div>
+        <div class="name">${pick.spot.name}${pick.spot.favorite?'<span class="badge" style="background:var(--mid);">&#9733; favorite</span>':''}${pick.spot.bottomType&&pick.spot.bottomType!=='unknown'?`<span class="badge" style="background:var(--muted);">${BOTTOM_TYPE_LABELS[pick.spot.bottomType]}</span>`:''}${pick.spot.skillLevel?`<span class="badge" style="background:${skillBadgeColor(pick.spot.skillLevel)};">${SKILL_LEVEL_LABELS[pick.spot.skillLevel]}</span>`:''}</div>
         ${pick.spot.group ? `<div class="note" style="text-transform:uppercase;letter-spacing:0.03em;font-size:11px;margin-top:-2px;">${escapeHtml(pick.spot.group)}</div>` : ''}
         <div class="bar"><i style="width:${pick.score}%;background:${barColor(pick.score)}"></i></div>
         <div class="note">${formatForecastTime(pick.pt.time)}</div>
@@ -309,7 +310,8 @@ function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, ti
             return `<td class="fc-cell${dayCls}" data-point-idx="${i}" data-spot-id="${spot.id}" style="background:${barColor(r.score)};color:#fff;">${r.score}</td>`;
           }).join('');
           const groupHtml = spot.group ? `<div style="font-weight:400;text-transform:uppercase;letter-spacing:0.03em;font-size:10px;color:var(--muted);">${escapeHtml(spot.group)}</div>` : '';
-          return `<tr><td class="sticky-col">${spot.name}${groupHtml}</td>${cells}</tr>`;
+          const favoriteHtml = spot.favorite ? ' &#9733;' : '';
+          return `<tr><td class="sticky-col">${spot.name}${favoriteHtml}${groupHtml}</td>${cells}</tr>`;
         }).join('')}
       </tbody>
     `;

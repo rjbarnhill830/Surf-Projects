@@ -179,6 +179,13 @@ function personalScore(profile,c){
 
 const SKILL_ORDER = {beginner:0, intermediate:1, advanced:2};
 
+// A flat, transparent bump rather than a multiplier — easy to explain ("+10
+// for being a favorite") and its effect doesn't scale with how good the
+// conditions already are. Applied after the skill-safety gate, not before:
+// favoriting a spot you're not skilled for should still get pulled down by
+// the gate first, then nudged back up a little, not bypass it.
+const FAVORITE_BOOST = 10;
+
 // Blends the published/customized spot profile score with whatever's been
 // learned from logged sessions at that spot, then applies a skill-level
 // safety gate. Shared by the live "current conditions" ranking and the
@@ -207,7 +214,10 @@ function scoreSpot(spot, conditions, sessions, userSkill){
   else if(gap>=2){ skillMultiplier = 0.25; outOfRange = outOfRange.concat(`requires ${spot.skillLevel} skill (you're set to ${userSkill})`); }
   total *= skillMultiplier;
 
-  return {score: round(Math.max(0, Math.min(100, total))), tag, outOfRange, localH, transmission, primarySwellIndex, swell1, swell2};
+  const favoriteBoost = spot.favorite ? FAVORITE_BOOST : 0;
+  total += favoriteBoost;
+
+  return {score: round(Math.max(0, Math.min(100, total))), tag, outOfRange, localH, transmission, primarySwellIndex, swell1, swell2, favoriteBoost};
 }
 
 function barColor(s){ return s>=75?"var(--good)":s>=50?"var(--mid)":"var(--low)"; }
