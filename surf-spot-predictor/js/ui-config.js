@@ -43,6 +43,7 @@ function blankCustomSpot(){
     custom: true,
     excluded: false,
     lat: null, lon: null,
+    group: '',
     dirMin:240, dirMax:300, facing:270, exposure:'moderate', minH:2, maxH:8,
     windDir:90, windTol:40, maxWind:15,
     tideMin:-2, tideMax:7, minPeriod:6, maxPeriod:22,
@@ -142,6 +143,24 @@ function locationFieldHtml(id, cur){
   `;
 }
 
+// Purely a display/organizational label — doesn't affect scoring, sorting,
+// or filtering at all. Lets several distinct named peaks (each with their
+// own full profile) be tagged as belonging to the same general location —
+// e.g. Ocean Beach SF's Kelly's Cove, Noriega, Sloat, etc. — so Ranked
+// spots and the Forecast grid can show that relationship without merging
+// or hiding any of them. The datalist (#spotGroupList, built fresh in
+// renderConfigCards from every group name already in use) is just an
+// autocomplete convenience to keep spellings consistent across peaks in
+// the same group.
+function groupFieldHtml(id, cur){
+  return `
+    <div>
+      <label>General location (optional)</label>
+      <input type="text" id="cfg-group-${id}" list="spotGroupList" value="${escapeHtml(cur.group||'')}" placeholder="e.g. Ocean Beach SF">
+    </div>
+  `;
+}
+
 function dirWindowFieldHtml(id, cur){
   return `
     <div style="grid-column:1/-1;">
@@ -179,6 +198,7 @@ function spotFieldsGridHtml(id, cur){
   return `
     <div class="cfggrid">
       ${locationFieldHtml(id, cur)}
+      ${groupFieldHtml(id, cur)}
       <div><label>Bottom type</label>
         <select id="cfg-bottomtype-${id}">
           ${Object.keys(BOTTOM_TYPE_LABELS).map(k=>`<option value="${k}" ${(cur.bottomType||'unknown')===k?'selected':''}>${BOTTOM_TYPE_LABELS[k]}</option>`).join('')}
@@ -228,6 +248,7 @@ function readFieldsFromForm(id){
   return {
     lat: latRaw!=='' ? +latRaw : null,
     lon: lonRaw!=='' ? +lonRaw : null,
+    group: document.getElementById('cfg-group-'+id).value.trim(),
     bottomType: document.getElementById('cfg-bottomtype-'+id).value,
     skillLevel: document.getElementById('cfg-skilllevel-'+id).value,
     waveStyle: Array.from(document.querySelectorAll('.cfg-wavestyle-'+id+':checked')).map(el=>el.value),
@@ -253,6 +274,16 @@ function renderConfigCards(){
   const box = document.getElementById('configCards');
   box.innerHTML='';
 
+  // Rebuilt fresh every render from whatever group names are currently in
+  // use, so the "General location" field's autocomplete always offers
+  // exactly the groups that exist right now (not stale ones from a
+  // renamed or deleted spot).
+  const groupNames = [...new Set(activeSpots.map(s=>s.group).filter(Boolean))].sort();
+  const datalist = document.createElement('datalist');
+  datalist.id = 'spotGroupList';
+  datalist.innerHTML = groupNames.map(g=>`<option value="${escapeHtml(g)}">`).join('');
+  box.appendChild(datalist);
+
   // Collected rather than appended directly so both built-in and custom
   // cards can be interleaved into one North-to-South list below, matching
   // the same sort convention as the Ranked spots and Forecast sections
@@ -268,7 +299,7 @@ function renderConfigCards(){
     el.className='cfgcard';
     el.dataset.id = def.id;
     el.innerHTML=`
-      <summary>${escapeHtml(cur.name)}${isEdited?'<span class="customized">edited</span>':''}${isExcluded?'<span class="customized" style="background:var(--low);">hidden</span>':''}<span class="chev">edit &#9662;</span></summary>
+      <summary>${escapeHtml(cur.name)}${cur.group?`<span class="customized" style="background:var(--muted);">${escapeHtml(cur.group)}</span>`:''}${isEdited?'<span class="customized">edited</span>':''}${isExcluded?'<span class="customized" style="background:var(--low);">hidden</span>':''}<span class="chev">edit &#9662;</span></summary>
       <div style="margin-top:10px;">
         <label>Spot name</label>
         <input type="text" id="cfg-name-${def.id}" value="${escapeHtml(cur.name)}">
@@ -302,7 +333,7 @@ function renderConfigCards(){
     el.dataset.id = cur.id;
     el.dataset.customId = cur.id;
     el.innerHTML=`
-      <summary>${escapeHtml(cur.name)}<span class="customized" style="background:var(--good);">custom</span>${cur.excluded?'<span class="customized" style="background:var(--low);">hidden</span>':''}<span class="chev">edit &#9662;</span></summary>
+      <summary>${escapeHtml(cur.name)}${cur.group?`<span class="customized" style="background:var(--muted);">${escapeHtml(cur.group)}</span>`:''}<span class="customized" style="background:var(--good);">custom</span>${cur.excluded?'<span class="customized" style="background:var(--low);">hidden</span>':''}<span class="chev">edit &#9662;</span></summary>
       <div style="margin-top:10px;">
         <label>Spot name</label>
         <input type="text" id="cfg-name-${cur.id}" value="${escapeHtml(cur.name)}">

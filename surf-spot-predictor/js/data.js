@@ -54,10 +54,35 @@ const norcalSpots = [
     blurb:"Valley funnels S/SE wind offshore even when the coast is blown out. Best NW swell, incoming mid-to-high tide."
   },
   {
-    id:"oceanbeach", name:"Ocean Beach SF", bottomType:"beach", skillLevel:"advanced", waveStyle:["powerful","hollow"],
+    // Ocean Beach SF is split into its named peaks below (group "Ocean Beach
+    // SF") rather than one bundled entry — this one now represents
+    // specifically the mid-beach avenue peaks, kept under its original id
+    // ("oceanbeach") and unchanged numeric profile since ~20 imported
+    // historical sessions and the spreadsheet importer's OB text-matcher
+    // (see spreadsheet.js) already reference this exact id; only the name,
+    // blurb, and new group field changed here.
+    id:"oceanbeach", name:"The Avenues (Judah–Noriega)", group:"Ocean Beach SF", bottomType:"beach", skillLevel:"advanced", waveStyle:["powerful","hollow"],
     lat:37.7594, lon:-122.5108,
     dirMin:235, dirMax:305, facing:270, exposure:"open", minH:4, maxH:18, windDir:90, windTol:35, maxWind:14, tideMin:-2, tideMax:4, minPeriod:9, maxPeriod:20, tideStation:"9414275",
-    blurb:"Big, powerful, tide-dominated. Takes almost any swell direction. Best offshore E wind, low-to-mid tide. Advanced. Includes Noriega, Taraval, Vicente, Judah, Moraga, Kelly's Cove and the numbered stairs. Beach break, but exposed and deep enough that &mdash; unlike most beach breaks &mdash; it actually wants a longer-period, more organized swell to get properly good."
+    blurb:"Big, powerful, tide-dominated. Takes almost any swell direction. Best offshore E wind, low-to-mid tide. Advanced. The mid-beach stretch of numbered avenue peaks &mdash; Noriega, Ortega, Pacheco, Taraval, Judah, Vicente, Moraga &mdash; plus the numbered stairs surfers use to describe where a peak is breaking that day. No documented differences between the individual avenues; treat this as one consistent, steep, powerful stretch, the heart of Ocean Beach. Beach break, but exposed and deep enough that &mdash; unlike most beach breaks &mdash; it actually wants a longer-period, more organized swell to get properly good."
+  },
+  {
+    id:"oceanbeach-kellyscove", name:"Kelly's Cove", group:"Ocean Beach SF", bottomType:"beach", skillLevel:"intermediate", waveStyle:["playful"],
+    lat:37.7770, lon:-122.5113, // approximate — near the Cliff House/Sutro Baths, the far north end of Ocean Beach
+    dirMin:200, dirMax:280, facing:250, exposure:"sheltered", minH:2, maxH:10, windDir:90, windTol:45, maxWind:16, tideMin:-2, tideMax:5, minPeriod:6, maxPeriod:16, tideStation:"9414275",
+    blurb:"The original SF surf spot &mdash; \"birthplace of San Francisco surfing\" &mdash; at the far north end of Ocean Beach near the Cliff House and Sutro Baths. Sheltered from NW wind and breaking closer to shore in shallower water than the rest of the beach, so it generally runs smaller and less arduous; also picks up south swell better than the peaks further south. Still cold, open-ocean and current-prone &mdash; not a true beginner wave, but the most approachable part of Ocean Beach."
+  },
+  {
+    id:"oceanbeach-vfws", name:"VFW's (Beach Chalet)", group:"Ocean Beach SF", bottomType:"beach", skillLevel:"intermediate", waveStyle:["playful","powerful"],
+    lat:37.7702, lon:-122.5109, // approximate — in front of the Beach Chalet, west end of Golden Gate Park
+    dirMin:245, dirMax:295, facing:260, exposure:"moderate", minH:3, maxH:14, windDir:90, windTol:40, maxWind:15, tideMin:-2, tideMax:4.5, minPeriod:7, maxPeriod:18, tideStation:"9414275",
+    blurb:"In front of the Beach Chalet at the west end of Golden Gate Park, between Kelly's Cove and the Avenues. Sources disagree on its character &mdash; some describe an easier paddle-out with waves breaking close to shore, others describe it as broader with bigger waves than Kelly's Cove &mdash; treat it as a transitional stretch rather than clearly mellow or clearly heavy."
+  },
+  {
+    id:"oceanbeach-sloat", name:"Sloat (Fleishhacker)", group:"Ocean Beach SF", bottomType:"beach", skillLevel:"advanced", waveStyle:["powerful","hollow"],
+    lat:37.7346, lon:-122.5058, // approximate — foot of Sloat Blvd near the SF Zoo, the far south end of Ocean Beach
+    dirMin:240, dirMax:310, facing:280, exposure:"open", minH:4, maxH:20, windDir:90, windTol:32, maxWind:13, tideMin:-2, tideMax:4, minPeriod:10, maxPeriod:22, tideStation:"9414275",
+    blurb:"Far south end of Ocean Beach near the SF Zoo and the foot of Sloat Blvd. Powerful, fast beachbreak with broad, shifting sandbars, popular with experienced surfers. Winter NW-W swells produce heavy waves and strong currents, with a real sneaker-wave risk. Historically less surfed than the Avenues, though that's changed in recent years."
   },
   {
     id:"rockaway", name:"Rockaway Beach (Pacifica)", bottomType:"combo", skillLevel:"intermediate", waveStyle:["powerful","hollow"],

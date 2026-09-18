@@ -103,6 +103,7 @@ function spotsOverviewPopupHtml(spot){
   return `
     <div class="spot-map-popup">
       <b>${escapeHtml(spot.name)}</b>
+      ${spot.group ? `<div class="sub" style="text-transform:uppercase;letter-spacing:0.03em;font-size:10.5px;margin-top:1px;">${escapeHtml(spot.group)}</div>` : ''}
       ${bits.length ? `<div class="sub" style="margin:2px 0 6px;">${bits.join(' &middot; ')}</div>` : ''}
       ${spot.blurb ? `<div style="font-size:12.5px;margin-bottom:8px;">${escapeHtml(spot.blurb)}</div>` : ''}
       <button type="button" class="spot-map-jump" data-id="${spot.id}">Edit this spot &darr;</button>
