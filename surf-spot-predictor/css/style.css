@@ -102,6 +102,9 @@ button.primary:hover{background:var(--deep2);}
 .cfgbtns{display:flex;gap:10px;margin-top:14px;}
 .cfgbtns button{font-size:12.5px;padding:6px 12px;}
 .customized{font-size:11px;background:var(--mid);color:#fff;padding:2px 7px;border-radius:10px;margin-left:8px;}
+.cfgcard-group{background:#f3ecd9;}
+.cfgcard-group>summary{font-family:Georgia,serif;font-weight:400;font-size:16px;}
+.cfggroup-children{display:flex;flex-direction:column;gap:12px;margin-top:14px;padding-left:14px;border-left:3px solid var(--line);}
 .section-collapsible>summary{cursor:pointer;list-style:none;}
 .section-collapsible>summary::-webkit-details-marker{display:none;}
 .section-collapsible>summary h2{display:flex;justify-content:space-between;align-items:center;}

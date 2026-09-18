@@ -43,7 +43,7 @@ function blankCustomSpot(){
     custom: true,
     excluded: false,
     lat: null, lon: null,
-    group: '',
+    group: '', county: '',
     dirMin:240, dirMax:300, facing:270, exposure:'moderate', minH:2, maxH:8,
     windDir:90, windTol:40, maxWind:15,
     tideMin:-2, tideMax:7, minPeriod:6, maxPeriod:22,
@@ -161,6 +161,24 @@ function groupFieldHtml(id, cur){
   `;
 }
 
+// Drives the county grouping in Customize spot profiles (see
+// renderConfigCards) — a fixed list rather than free text so spellings
+// can't fragment a county into two accidental buckets. A spot with no
+// county set falls into an "Other locations" bucket at the end rather
+// than breaking anything.
+const COUNTY_ORDER = ['Sonoma','Marin','San Francisco','San Mateo','Santa Cruz','Monterey'];
+function countyFieldHtml(id, cur){
+  return `
+    <div>
+      <label>County (optional)</label>
+      <select id="cfg-county-${id}">
+        <option value="" ${!cur.county?'selected':''}>Not set</option>
+        ${COUNTY_ORDER.map(c=>`<option value="${c}" ${cur.county===c?'selected':''}>${c}</option>`).join('')}
+      </select>
+    </div>
+  `;
+}
+
 function dirWindowFieldHtml(id, cur){
   return `
     <div style="grid-column:1/-1;">
@@ -199,6 +217,7 @@ function spotFieldsGridHtml(id, cur){
     <div class="cfggrid">
       ${locationFieldHtml(id, cur)}
       ${groupFieldHtml(id, cur)}
+      ${countyFieldHtml(id, cur)}
       <div><label>Bottom type</label>
         <select id="cfg-bottomtype-${id}">
           ${Object.keys(BOTTOM_TYPE_LABELS).map(k=>`<option value="${k}" ${(cur.bottomType||'unknown')===k?'selected':''}>${BOTTOM_TYPE_LABELS[k]}</option>`).join('')}
@@ -249,6 +268,7 @@ function readFieldsFromForm(id){
     lat: latRaw!=='' ? +latRaw : null,
     lon: lonRaw!=='' ? +lonRaw : null,
     group: document.getElementById('cfg-group-'+id).value.trim(),
+    county: document.getElementById('cfg-county-'+id).value,
     bottomType: document.getElementById('cfg-bottomtype-'+id).value,
     skillLevel: document.getElementById('cfg-skilllevel-'+id).value,
     waveStyle: Array.from(document.querySelectorAll('.cfg-wavestyle-'+id+':checked')).map(el=>el.value),
@@ -324,7 +344,7 @@ function renderConfigCards(){
         <span class="cfgmsg" data-id="${def.id}" style="font-size:12px;color:var(--good);align-self:center;"></span>
       </div>
     `;
-    cards.push({lat: cur.lat, el});
+    cards.push({lat: cur.lat, county: cur.county, group: cur.group, el});
   });
 
   customSpots.forEach(cur=>{
@@ -358,11 +378,61 @@ function renderConfigCards(){
         <span class="cfgmsg" data-id="${cur.id}" style="font-size:12px;color:var(--good);align-self:center;"></span>
       </div>
     `;
-    cards.push({lat: cur.lat, el});
+    cards.push({lat: cur.lat, county: cur.county, group: cur.group, el});
   });
 
-  cards.sort((a,b)=>(b.lat ?? -999)-(a.lat ?? -999));
-  cards.forEach(c=>box.appendChild(c.el));
+  // Group by county (fixed geographic order; unset county sorts last),
+  // then North-to-South by latitude within each county — same convention
+  // used everywhere else in the app.
+  const countyIndex = c => { const i = COUNTY_ORDER.indexOf(c); return i===-1 ? COUNTY_ORDER.length : i; };
+  cards.sort((a,b)=>{
+    const ci = countyIndex(a.county) - countyIndex(b.county);
+    if(ci!==0) return ci;
+    return (b.lat ?? -999)-(a.lat ?? -999);
+  });
+
+  // A "general location" group only collapses into one expandable parent
+  // when every one of its members landed in the same county bucket — if
+  // they're split across counties (not really one "general location" at
+  // that point) each still renders as its own top-level card with just
+  // the group badge, rather than building a confusing cross-county wrapper.
+  const countyOfGroup = {};
+  const groupCounts = {};
+  cards.forEach(c=>{
+    if(!c.group) return;
+    groupCounts[c.group] = (groupCounts[c.group]||0)+1;
+    if(!(c.group in countyOfGroup)) countyOfGroup[c.group] = c.county;
+    else if(countyOfGroup[c.group] !== c.county) countyOfGroup[c.group] = null;
+  });
+  const isCollapsibleGroup = g => !!g && groupCounts[g]>1 && countyOfGroup[g]!=null;
+
+  let lastCounty;
+  const renderedGroups = new Set();
+  cards.forEach(c=>{
+    if(c.county !== lastCounty){
+      lastCounty = c.county;
+      const heading = document.createElement('h3');
+      heading.className = 'fc-heading';
+      heading.style.marginTop = '22px';
+      heading.textContent = c.county || 'Other locations';
+      box.appendChild(heading);
+    }
+    if(isCollapsibleGroup(c.group)){
+      if(renderedGroups.has(c.group)) return; // its peaks were all appended when the group's first member was reached
+      renderedGroups.add(c.group);
+      const groupCards = cards.filter(x=>x.group===c.group);
+      const wrapper = document.createElement('details');
+      wrapper.className = 'cfgcard cfgcard-group';
+      wrapper.innerHTML = `<summary>${escapeHtml(c.group)}<span class="customized" style="background:var(--muted);">${groupCards.length} peaks</span><span class="chev">expand &#9662;</span></summary>`;
+      const childrenBox = document.createElement('div');
+      childrenBox.className = 'cfggroup-children';
+      groupCards.forEach(g=>childrenBox.appendChild(g.el));
+      wrapper.appendChild(childrenBox);
+      box.appendChild(wrapper);
+    }else{
+      box.appendChild(c.el);
+    }
+  });
   renderSpotsOverviewMap();
 
   box.querySelectorAll('.dirpoint-checkbox').forEach(chk=>{
