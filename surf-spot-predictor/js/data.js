@@ -481,7 +481,20 @@ const norcalForecastLocations = [
   // override to it than to Monterey (9413450), though most have their own
   // explicit tideStation regardless.
   { id:"montereybay", label:"Monterey Bay", ndbcStation:"46042", tideStation:"9413745", lat:36.787, lon:-122.408,
-    near:"Steamer Lane, Pleasure Point, Capitola, Asilomar" }
+    near:"Steamer Lane, Pleasure Point, Capitola, Asilomar" },
+  // A second, more hyper-local option for the same Santa Cruz cluster —
+  // montereybay's 46042 is a deep-water buoy 27nm offshore; this one is a
+  // 20m-depth nearshore Waverider right off Santa Cruz itself (Scripps/CDIP
+  // station 254, relayed through NDBC as 46269), so its lat/lon gives the
+  // week-ahead Open-Meteo timeline a genuinely different, closer query point
+  // for the Santa Cruz spots specifically, not just a relabeled duplicate.
+  // Caveat verified via NDBC's own station page as of this writing: 46269
+  // has reported no data for 45+ days, so "Load buoy reading" here will
+  // currently fail with a clean error — only the week-ahead Forecast
+  // section (which uses Open-Meteo at this lat/lon, not the buoy feed
+  // directly) is unaffected. Left in since the buoy may resume reporting.
+  { id:"ptsantacruz", label:"Point Santa Cruz", ndbcStation:"46269", tideStation:"9413745", lat:36.934, lon:-122.034,
+    near:"Steamer Lane, Pleasure Point, Natural Bridges, Cowell's" }
 ];
 
 const SPOT_OFFSHORE = {
