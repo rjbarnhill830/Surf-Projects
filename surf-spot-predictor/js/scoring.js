@@ -136,6 +136,57 @@ const WIND_ONSHORE_GATE_MAX_PENALTY = 0.65;
 const WIND_ONSHORE_GATE_POWER = 1.5;
 const WIND_ONSHORE_LABEL_ANGLE = 120;
 
+// The current wind reading isn't the whole story — sustained onshore or
+// poorly-directed wind over the preceding hours churns the surface up
+// (windswell chop, disorganized texture), and that residue lingers even
+// after the wind itself swings back to something clean; the ocean needs
+// time to lay back down, not just a direction change. Only meaningful with
+// an actual hourly history to look back through (the Forecast section's
+// fetched timeline), so it's a no-op — never called, or called with no
+// history — for the live "Current conditions" single-reading panel, which
+// has no timeline to draw from.
+const WIND_HISTORY_LOOKBACK_HOURS = 24;
+const WIND_HISTORY_GATE_MAX_PENALTY = 0.35;
+
+// How choppy a single historical hour's wind was for a given spot — reuses
+// the same convex onshore-angle curve as the live wind-onshore gate (mild
+// through cross-shore, steep approaching dead onshore), scaled by how
+// strong that hour's wind was relative to the spot's own maxWind. Both
+// factors matter: a light onshore breeze barely stirs the water, and a
+// strong wind squarely offshore doesn't churn it either — it takes real
+// strength AND bad direction together to actually work the surface up.
+function hourChoppiness(spot, windDir, windS){
+  const angle = angDiff(windDir, spot.windDir);
+  const onshoreSeverity = Math.pow(angle/180, WIND_ONSHORE_GATE_POWER);
+  const speedFactor = spot.maxWind>0 ? Math.min(1, windS/spot.maxWind) : 0;
+  return onshoreSeverity*speedFactor;
+}
+
+// Weighted average of hourChoppiness() over the preceding
+// WIND_HISTORY_LOOKBACK_HOURS, recency-weighted (linearly from full weight
+// at "just now" down to none at the edge of the window, so the last hour or
+// two of wind matters more to current surface texture than something a full
+// day ago) — returns 0 (no penalty) when there's no history to look back
+// through, or no target time to measure "ago" from, rather than guessing.
+function windHistoryChoppiness(spot, historyPoints, targetTimeIso){
+  if(!historyPoints || historyPoints.length===0 || !targetTimeIso) return 0;
+  const targetMs = new Date(targetTimeIso).getTime();
+  let weightedSum = 0, weightTotal = 0;
+  historyPoints.forEach(pt=>{
+    if(pt.windS==null || pt.windDir==null) return;
+    // Both pt.time and targetTimeIso are naive local strings for the same
+    // location (Open-Meteo's timezone=auto) — parsing them with the same
+    // (possibly "wrong," tz-shifted) Date interpretation still gives the
+    // correct hour difference, since the shift cancels out in the subtraction.
+    const hoursAgo = (targetMs - new Date(pt.time).getTime())/3600000;
+    if(hoursAgo<=0 || hoursAgo>WIND_HISTORY_LOOKBACK_HOURS) return;
+    const weight = 1 - hoursAgo/WIND_HISTORY_LOOKBACK_HOURS;
+    weightedSum += hourChoppiness(spot, pt.windDir, pt.windS)*weight;
+    weightTotal += weight;
+  });
+  return weightTotal>0 ? weightedSum/weightTotal : 0;
+}
+
 // A global, spot-independent reality check, on top of every per-spot
 // preference above: swell under ~2ft AND under ~16s period genuinely isn't
 // going to produce real surf anywhere, no matter how permissive a given
@@ -401,6 +452,15 @@ function staticScore(spot,c){
   const onshoreFraction = windAngle/180;
   const windGate = 1 - WIND_ONSHORE_GATE_MAX_PENALTY*Math.pow(onshoreFraction, WIND_ONSHORE_GATE_POWER);
 
+  // Residual chop from the preceding ~24h of wind (see windHistoryChoppiness
+  // above) — only non-zero when the caller actually supplies a history to
+  // look back through (c.windHistory), which only the Forecast timeline
+  // does; the live "Current conditions" panel has no history and this is a
+  // silent no-op there.
+  const priorChoppiness = windHistoryChoppiness(spot, c.windHistory, c.time);
+  const windHistoryGate = 1 - WIND_HISTORY_GATE_MAX_PENALTY*priorChoppiness;
+  if(priorChoppiness>=0.4) outOfRange.push(`residual chop from recent onshore/poorly-directed wind &mdash; surface hasn't cleaned up yet`);
+
   let total;
   if(c.waveStyles && c.waveStyles.length>0){
     // Wave-style preference gets 0.15, with the other six components scaled
@@ -417,8 +477,9 @@ function staticScore(spot,c){
   }
   total *= swellGate;
   total *= windGate;
+  total *= windHistoryGate;
   if(isGloballyFlat) total *= GLOBAL_FLAT_GATE_FLOOR;
-  return {total, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, tideDisqualified};
+  return {total, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, tideDisqualified, priorChoppiness};
 }
 
 function personalProfile(spotId,sessions){
@@ -461,7 +522,7 @@ const FAVORITE_BOOST = 10;
 // week-ahead forecast timeline so both always agree on how a spot is scored
 // for the same conditions and the same surfer.
 function scoreSpot(spot, conditions, sessions, userSkill){
-  let {total:base, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, tideDisqualified} = staticScore(spot, conditions);
+  let {total:base, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, tideDisqualified, priorChoppiness} = staticScore(spot, conditions);
   const profile = personalProfile(spot.id, sessions);
   let total = base;
   let tag = null;
@@ -492,10 +553,10 @@ function scoreSpot(spot, conditions, sessions, userSkill){
   // regardless of how good swell/wind/skill/favorite status look. Overrides
   // everything computed above, including the favorite boost.
   if(tideDisqualified){
-    return {score: 0, tag, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, favoriteBoost: 0, tideDisqualified: true};
+    return {score: 0, tag, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, favoriteBoost: 0, tideDisqualified: true, priorChoppiness};
   }
 
-  return {score: round(Math.max(0, Math.min(100, total))), tag, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, favoriteBoost, tideDisqualified: false};
+  return {score: round(Math.max(0, Math.min(100, total))), tag, outOfRange, localH, blockage, transmission, primarySwellIndex, swell1, swell2, favoriteBoost, tideDisqualified: false, priorChoppiness};
 }
 
 function barColor(s){ return s>=75?"var(--good)":s>=50?"var(--mid)":"var(--low)"; }

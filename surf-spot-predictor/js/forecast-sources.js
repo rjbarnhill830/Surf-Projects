@@ -272,8 +272,17 @@ function sunTimesLocalMinutes(dateStr, lat, lon, utcOffsetSeconds){
 // rather than being omitted, so callers can tell "no station configured" apart
 // from "station configured but the fetch failed".
 async function fetchForecastTimeline(location, days, spots){
-  const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${location.lat}&longitude=${location.lon}&hourly=swell_wave_height,swell_wave_period,swell_wave_direction,secondary_swell_wave_height,secondary_swell_wave_period,secondary_swell_wave_direction&timezone=auto&forecast_days=${days}`;
-  const windUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&hourly=windspeed_10m,winddirection_10m&wind_speed_unit=mph&timezone=auto&forecast_days=${days}`;
+  // past_days=1 pulls in the prior day's (modeled, not observed — Open-Meteo
+  // docs are explicit that past_days on the forecast endpoints returns past
+  // *forecasts*, same as everything else this app already uses) hourly wind
+  // alongside the requested forward window, so there's always a full 24h of
+  // wind history available before "now" for the residual-chop check in
+  // scoring.js — regardless of what hour of the day the fetch happens to run
+  // at. The display-side reachability/daylight filters in ui-forecast.js
+  // already drop anything before "now", so these extra hours never show up
+  // as rows/columns — they're only used for lookback.
+  const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${location.lat}&longitude=${location.lon}&hourly=swell_wave_height,swell_wave_period,swell_wave_direction,secondary_swell_wave_height,secondary_swell_wave_period,secondary_swell_wave_direction&timezone=auto&forecast_days=${days}&past_days=1`;
+  const windUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&hourly=windspeed_10m,winddirection_10m&wind_speed_unit=mph&timezone=auto&forecast_days=${days}&past_days=1`;
 
   let marineRes, windRes;
   try{

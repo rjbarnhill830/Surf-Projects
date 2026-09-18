@@ -132,7 +132,12 @@ function pointDetailHtml(pt, spot, tideByStation, fallbackStationId){
   const hasSwell2 = pt.swellH2!=null;
   let scoreSection = '';
   if(spot){
-    const conditions = Object.assign({waveStyles: userWaveStyles}, pt, tide);
+    // fcLastFetch.timeline is the raw, unfiltered fetch (includes the
+    // past_days=1 hours before "now") — the same source used elsewhere in
+    // this file for the residual-wind-chop lookback, so a spot's detail
+    // panel agrees with its grid cell.
+    const windHistory = fcLastFetch ? fcLastFetch.timeline : null;
+    const conditions = Object.assign({waveStyles: userWaveStyles, windHistory}, pt, tide);
     const r = scoreSpot(spot, conditions, sessionCache, userSkillLevel);
     scoreSection = `
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);">
@@ -240,7 +245,7 @@ function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, ti
   const bestPerSpot = {};
   timeline.forEach(pt=>{
     spotsToScore.forEach(spot=>{
-      const conditions = Object.assign({waveStyles: userWaveStyles}, pt, tideForSpotAt(spot, pt.time, tideByStation, fallbackStationId));
+      const conditions = Object.assign({waveStyles: userWaveStyles, windHistory: rawTimeline}, pt, tideForSpotAt(spot, pt.time, tideByStation, fallbackStationId));
       const r = scoreSpot(spot, conditions, sessionCache, userSkillLevel);
       if(!bestPerSpot[spot.id] || r.score > bestPerSpot[spot.id].score){
         bestPerSpot[spot.id] = {spot, pt, score:r.score};
@@ -311,7 +316,7 @@ function renderForecastResults(rawTimeline, tideByStation, fallbackStationId, ti
   const scoresBySpot = {};
   orderedSpots.forEach(spot=>{
     scoresBySpot[spot.id] = sampledPoints.map(p=>{
-      const conditions = Object.assign({waveStyles: userWaveStyles}, p, tideForSpotAt(spot, p.time, tideByStation, fallbackStationId));
+      const conditions = Object.assign({waveStyles: userWaveStyles, windHistory: rawTimeline}, p, tideForSpotAt(spot, p.time, tideByStation, fallbackStationId));
       return scoreSpot(spot, conditions, sessionCache, userSkillLevel).score;
     });
   });
@@ -432,7 +437,12 @@ function initForecastSection(){
       const {timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate, utcOffsetSeconds} = await fetchForecastTimeline(loc, days, spotsForTide);
       fcLastFetch = {timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate, utcOffsetSeconds};
       renderForecastResults(timeline, tideByStation, fallbackStationId, tideAvailable, tideError, daylightByDate, utcOffsetSeconds);
-      statusEl.textContent = `Loaded ${timeline.length} hourly points for ${loc.label}, filtered to daylight (${DAWN_BUFFER_MIN}min before sunrise through ${DUSK_BUFFER_MIN}min before sunset) and at least ${MIN_LEAD_TIME_MIN}min from now.`;
+      // timeline includes the past_days=1 hours fetched purely for the
+      // residual-wind-chop lookback (see fetchForecastTimeline) — always
+      // exactly 24 hourly points prepended, so subtract them back out here
+      // to report the actually-forward-looking count.
+      const forwardPointCount = Math.max(0, timeline.length-24);
+      statusEl.textContent = `Loaded ${forwardPointCount} hourly points for ${loc.label}, filtered to daylight (${DAWN_BUFFER_MIN}min before sunrise through ${DUSK_BUFFER_MIN}min before sunset) and at least ${MIN_LEAD_TIME_MIN}min from now.`;
     }catch(err){
       statusEl.textContent = `Couldn't load the forecast: ${err.message}`;
     }finally{
