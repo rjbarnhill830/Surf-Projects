@@ -78,31 +78,39 @@ const SHORT_PERIOD_PENALTY_FLOOR = 0.2;
 // ceiling gets hit much harder by the same relative overshoot. Crossing
 // OVERLOAD_EXCESS_RATIO (50% over max) is flagged with an explicit note
 // rather than just a lower number, since "outside ideal range" undersells
-// an actually-overloaded spot.
+// an actually-overloaded spot. Period's rate is set higher than size's (and
+// its taper starts sooner, floors lower — see PERIOD_TAPER_* below) because
+// wave energy scales with period more than with height: the same relative
+// overshoot in period packs a bigger real-world punch than the same
+// overshoot in size.
 const OVERSIZE_PENALTY_RATE = 100;
-const OVERPERIOD_PENALTY_RATE = 130;
+const OVERPERIOD_PENALTY_RATE = 150;
 const OVERLOAD_EXCESS_RATIO = 0.5;
 
 // The top of a spot's swell window isn't as clean as the middle of it — a
 // spot rated up to 6ft is already getting pushed at 5.5ft, not still a flat
 // "perfect." Rather than snapping straight from 100 to the oversized penalty
-// right at maxH, size score starts tapering down once it's within the top
-// (1-SIZE_TAPER_START_FRACTION) of the spot's own min-max range, reaching
-// SIZE_TAPER_FLOOR_AT_MAX right at the top — which the oversized-branch
-// formula then continues past, so the curve is one continuous decline
-// through and beyond the max rather than a reset back to 100 at the
-// boundary.
+// right at the max, size/period scores start tapering down once within the
+// top fraction of the spot's own min-max range, reaching a floor right at
+// the max that the oversized-branch formula then continues past — one
+// continuous decline through and beyond the max rather than a reset back to
+// 100 at the boundary. Period tapers sooner and floors lower than size,
+// same "period matters more" reasoning as the penalty rates above.
 const SIZE_TAPER_START_FRACTION = 0.6;
 const SIZE_TAPER_FLOOR_AT_MAX = 80;
+const PERIOD_TAPER_START_FRACTION = 0.55;
+const PERIOD_TAPER_FLOOR_AT_MAX = 70;
 
 // Shallower water at the low end of a spot's own tide window means the same
-// swell height breaks in less depth and closes out/overloads sooner; more
-// water at the high end absorbs it more gently, so the same swell is more
-// manageable. Modeled as a shift to the spot's *effective* max height — not
-// a flat number of feet, since spots have wildly different maxH's — scaled
-// to where in the spot's own tideMin-tideMax window the current tide sits
-// (0 = low end, 1 = high end, 0.5/unknown = no adjustment either way).
+// swell height (or period) breaks in less depth and closes out/overloads
+// sooner; more water at the high end absorbs it more gently, so the same
+// swell is more manageable. Modeled as a shift to the spot's *effective*
+// max — not a flat number of feet or seconds, since spots have wildly
+// different maxH's/maxPeriods — scaled to where in the spot's own
+// tideMin-tideMax window the current tide sits (0 = low end, 1 = high end,
+// 0.5/unknown = no adjustment either way).
 const TIDE_MAXH_ADJUST_RANGE = 0.15;
+const TIDE_MAXPERIOD_ADJUST_RANGE = 0.15;
 
 function tideFtToCategory(ft){
   if(ft<1.5) return 'low';
@@ -169,16 +177,43 @@ function swellComponentScores(spot, dir, height, period, transmission, tideFt){
     }
   }
 
+  // Same tide-window fraction as size above, applied to the spot's period
+  // ceiling — deeper water at high tide lets a spot handle a longer-period
+  // swell before it overpowers the bathymetry, shallower water at low tide
+  // brings that ceiling down.
+  const tidePeriodAdjust = 1 + (tideFraction-0.5)*2*TIDE_MAXPERIOD_ADJUST_RANGE;
+  const effectiveMaxPeriod = spot.maxPeriod*tidePeriodAdjust;
+
   let periodScore;
   let periodOverloaded = false;
   if(period<spot.minPeriod){ periodScore=Math.max(0,100-(spot.minPeriod-period)*15); outOfRange.push(`period (wants ${spot.minPeriod}-${spot.maxPeriod}s)`); }
-  else if(period>spot.maxPeriod){
-    const excessRatio = spot.maxPeriod>0 ? (period-spot.maxPeriod)/spot.maxPeriod : 0;
-    periodScore = Math.max(0, 100 - excessRatio*OVERPERIOD_PENALTY_RATE);
+  else if(period>effectiveMaxPeriod){
+    // Oversized period is scored proportionally to the spot's own (tide-
+    // adjusted) maximum, at a steeper rate and lower floor than size (see
+    // OVERPERIOD_PENALTY_RATE/PERIOD_TAPER_FLOOR_AT_MAX above) since a
+    // longer period carries more real energy than the same relative excess
+    // in swell height.
+    const excessRatio = effectiveMaxPeriod>0 ? (period-effectiveMaxPeriod)/effectiveMaxPeriod : 0;
+    periodScore = Math.max(0, PERIOD_TAPER_FLOOR_AT_MAX - excessRatio*OVERPERIOD_PENALTY_RATE);
     if(excessRatio >= OVERLOAD_EXCESS_RATIO) periodOverloaded = true;
-    else outOfRange.push(`period (wants ${spot.minPeriod}-${spot.maxPeriod}s)`);
+    // Only flagged against the spot's own listed range, not the tide-shifted
+    // one — same reasoning as size: a period nominally within range that a
+    // low tide pushed past the effective ceiling is scored down quietly
+    // rather than called "outside" a range it's technically still inside.
+    else if(period>spot.maxPeriod) outOfRange.push(`period (wants ${spot.minPeriod}-${spot.maxPeriod}s)`);
   }
-  else periodScore=100;
+  else{
+    // Approaching the (tide-adjusted) top of the period range already
+    // pushes a spot's limits, so score tapers down through the top fraction
+    // of the range instead of staying a flat 100 right up to the boundary.
+    const taperStart = spot.minPeriod + PERIOD_TAPER_START_FRACTION*(effectiveMaxPeriod-spot.minPeriod);
+    if(period>=taperStart && effectiveMaxPeriod>taperStart){
+      const t = (period-taperStart)/(effectiveMaxPeriod-taperStart);
+      periodScore = 100 - t*(100-PERIOD_TAPER_FLOOR_AT_MAX);
+    }else{
+      periodScore = 100;
+    }
+  }
 
   if(sizeOverloaded || periodOverloaded){
     const parts = [];
