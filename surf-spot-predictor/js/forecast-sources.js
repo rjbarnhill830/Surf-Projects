@@ -85,12 +85,14 @@ function buildOpenMeteoTimeline(marine, wind){
 // Combines Open-Meteo's Marine API (swell) and Weather API (wind). Returns
 // both the single reading closest to now + hourOffset hours (for the
 // "Current conditions" sliders) and the full fetched hourly timeline (for
-// the trend table below them, so the whole ~3-day forecast_days window is
-// visible, not just the one requested hour). Both source APIs are free,
+// the trend table below them, so the whole ~10-day forecast_days window is
+// visible, not just the one requested hour) — 10 days covers the hour-offset
+// picker's furthest-out option (+10 days) with no gap between what can be
+// selected and what's actually been fetched. Both source APIs are free,
 // public, no API key, and documented as CORS-enabled for browser use.
 async function fetchOpenMeteoForecast(lat, lon, hourOffset){
-  const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=swell_wave_height,swell_wave_period,swell_wave_direction,secondary_swell_wave_height,secondary_swell_wave_period,secondary_swell_wave_direction&timezone=auto&forecast_days=3`;
-  const windUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=windspeed_10m,winddirection_10m&wind_speed_unit=mph&timezone=auto&forecast_days=3`;
+  const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=swell_wave_height,swell_wave_period,swell_wave_direction,secondary_swell_wave_height,secondary_swell_wave_period,secondary_swell_wave_direction&timezone=auto&forecast_days=10`;
+  const windUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=windspeed_10m,winddirection_10m&wind_speed_unit=mph&timezone=auto&forecast_days=10`;
 
   let marineRes, windRes;
   try{
