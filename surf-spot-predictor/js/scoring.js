@@ -79,9 +79,30 @@ const SHORT_PERIOD_PENALTY_FLOOR = 0.2;
 // OVERLOAD_EXCESS_RATIO (50% over max) is flagged with an explicit note
 // rather than just a lower number, since "outside ideal range" undersells
 // an actually-overloaded spot.
-const OVERSIZE_PENALTY_RATE = 130;
+const OVERSIZE_PENALTY_RATE = 100;
 const OVERPERIOD_PENALTY_RATE = 130;
 const OVERLOAD_EXCESS_RATIO = 0.5;
+
+// The top of a spot's swell window isn't as clean as the middle of it — a
+// spot rated up to 6ft is already getting pushed at 5.5ft, not still a flat
+// "perfect." Rather than snapping straight from 100 to the oversized penalty
+// right at maxH, size score starts tapering down once it's within the top
+// (1-SIZE_TAPER_START_FRACTION) of the spot's own min-max range, reaching
+// SIZE_TAPER_FLOOR_AT_MAX right at the top — which the oversized-branch
+// formula then continues past, so the curve is one continuous decline
+// through and beyond the max rather than a reset back to 100 at the
+// boundary.
+const SIZE_TAPER_START_FRACTION = 0.6;
+const SIZE_TAPER_FLOOR_AT_MAX = 80;
+
+// Shallower water at the low end of a spot's own tide window means the same
+// swell height breaks in less depth and closes out/overloads sooner; more
+// water at the high end absorbs it more gently, so the same swell is more
+// manageable. Modeled as a shift to the spot's *effective* max height — not
+// a flat number of feet, since spots have wildly different maxH's — scaled
+// to where in the spot's own tideMin-tideMax window the current tide sits
+// (0 = low end, 1 = high end, 0.5/unknown = no adjustment either way).
+const TIDE_MAXH_ADJUST_RANGE = 0.15;
 
 function tideFtToCategory(ft){
   if(ft<1.5) return 'low';
@@ -94,7 +115,7 @@ function tideFtToCategory(ft){
 // applies the spot's transmission factor (shoaling/refraction calibration)
 // and the off-angle blockage factor below the same way regardless of which
 // swell it's being run on.
-function swellComponentScores(spot, dir, height, period, transmission){
+function swellComponentScores(spot, dir, height, period, transmission, tideFt){
   const outOfRange=[];
   const dirDist = angleDistanceToWindow(dir, spot.dirMin, spot.dirMax);
   const dirScore = Math.max(0,100-(dirDist/DIR_FALLOFF_DEGREES*100));
@@ -103,24 +124,50 @@ function swellComponentScores(spot, dir, height, period, transmission){
   const localH = Math.round(height*transmission*blockage*10)/10;
   let sizeScore;
   let sizeOverloaded = false;
+  // Where the current tide sits in the spot's own tideMin-tideMax window —
+  // 0 at the low end, 1 at the high end, 0.5 (no adjustment) when tide is
+  // unknown or the spot has no real tide window configured.
+  let tideFraction = 0.5;
+  if(tideFt!=null && spot.tideMax>spot.tideMin){
+    tideFraction = Math.max(0, Math.min(1, (tideFt-spot.tideMin)/(spot.tideMax-spot.tideMin)));
+  }
+  const tideMaxAdjust = 1 + (tideFraction-0.5)*2*TIDE_MAXH_ADJUST_RANGE;
+  const effectiveMaxH = spot.maxH*tideMaxAdjust;
+
   // Undersized swell is scored proportionally to the spot's own minimum
   // (100 at minH, scaling straight down to 0 at zero swell) rather than a
   // flat points-per-foot penalty — a flat rate let a near-flat swell (e.g.
   // 0.5ft against a 2-6ft window) still score 90+, which doesn't reflect
   // that under-minimum swell is heading toward "no rideable wave at all,"
-  // not just a minor miss. Oversized swell is likewise scored proportionally
-  // to the spot's own maximum (see OVERSIZE_PENALTY_RATE above) rather than
-  // a flat rate that let any spot absorb the same few extra feet the same
-  // way — a mellow beach break blows out and closes out well before a
-  // big-wave spot even notices the same absolute excess.
+  // not just a minor miss.
   if(localH<spot.minH){ sizeScore = spot.minH>0 ? Math.max(0,100*(localH/spot.minH)) : 100; outOfRange.push(`swell size (wants ${spot.minH}-${spot.maxH}ft)`); }
-  else if(localH>spot.maxH){
-    const excessRatio = spot.maxH>0 ? (localH-spot.maxH)/spot.maxH : 0;
-    sizeScore = Math.max(0, 100 - excessRatio*OVERSIZE_PENALTY_RATE);
+  else if(localH>effectiveMaxH){
+    // Oversized swell is scored proportionally to the spot's own (tide-
+    // adjusted) maximum rather than a flat rate — a mellow beach break
+    // blows out well before a big-wave spot even notices the same absolute
+    // excess, and low tide brings that ceiling down further while high
+    // tide pushes it back up.
+    const excessRatio = effectiveMaxH>0 ? (localH-effectiveMaxH)/effectiveMaxH : 0;
+    sizeScore = Math.max(0, SIZE_TAPER_FLOOR_AT_MAX - excessRatio*OVERSIZE_PENALTY_RATE);
     if(excessRatio >= OVERLOAD_EXCESS_RATIO) sizeOverloaded = true;
-    else outOfRange.push(`swell size (wants ${spot.minH}-${spot.maxH}ft)`);
+    // Only flagged against the spot's own listed range, not the tide-shifted
+    // one — a swell nominally within range that a low tide pushed past the
+    // effective ceiling gets scored down quietly rather than told it's
+    // "outside" a range it's technically still inside.
+    else if(localH>spot.maxH) outOfRange.push(`swell size (wants ${spot.minH}-${spot.maxH}ft)`);
   }
-  else sizeScore=100;
+  else{
+    // Approaching the (tide-adjusted) top of the range already pushes a
+    // spot's limits, so score tapers down through the top fraction of the
+    // range instead of staying a flat 100 right up to the boundary.
+    const taperStart = spot.minH + SIZE_TAPER_START_FRACTION*(effectiveMaxH-spot.minH);
+    if(localH>=taperStart && effectiveMaxH>taperStart){
+      const t = (localH-taperStart)/(effectiveMaxH-taperStart);
+      sizeScore = 100 - t*(100-SIZE_TAPER_FLOOR_AT_MAX);
+    }else{
+      sizeScore = 100;
+    }
+  }
 
   let periodScore;
   let periodOverloaded = false;
@@ -171,9 +218,9 @@ function checkRange(spot,c){
   // surfable there wins — a spot only "sees" the swell that suits it, not
   // an average of both. A second swell of height 0 or missing fields is
   // treated as not registering, not as an actual zero-height reading.
-  const swell1 = swellComponentScores(spot, c.swellDir, c.swellH, c.swellP, transmission);
+  const swell1 = swellComponentScores(spot, c.swellDir, c.swellH, c.swellP, transmission, c.tideFt);
   const hasSwell2 = c.swellH2>0 && c.swellP2!=null && c.swellDir2!=null;
-  const swell2 = hasSwell2 ? swellComponentScores(spot, c.swellDir2, c.swellH2, c.swellP2, transmission) : null;
+  const swell2 = hasSwell2 ? swellComponentScores(spot, c.swellDir2, c.swellH2, c.swellP2, transmission, c.tideFt) : null;
   const primarySwellIndex = (swell2 && swell2.blended > swell1.blended) ? 2 : 1;
   const primary = primarySwellIndex===2 ? swell2 : swell1;
   const {dirScore, sizeScore, periodScore, localH, blockage} = primary;
