@@ -54,6 +54,8 @@ button{
 button:hover{background:var(--ink);color:var(--sand);}
 button.primary{background:var(--deep);color:var(--sand);border-color:var(--deep);}
 button.primary:hover{background:var(--deep2);}
+button.go{background:var(--good);color:#fff;border-color:var(--good);}
+button.go:hover{background:#2f6d55;}
 .buoynote{font-size:12px;color:var(--muted);margin-top:8px;}
 .results{display:flex;flex-direction:column;gap:10px;margin-top:6px;}
 .card{
