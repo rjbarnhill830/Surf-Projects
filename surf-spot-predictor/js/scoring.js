@@ -575,3 +575,28 @@ function dirLabelShort(deg){
 function dirLabelDeg(deg){
   return `${dirLabel(deg)} (${Math.round(deg)}°)`;
 }
+
+// No forecast API (Open-Meteo included) exposes an actual measured wave
+// energy — height/period/direction is all any of them give. But deep-water
+// wave power flux is a well-established physical approximation from just
+// those two: P (kW per meter of wave crest) = (rho*g^2/64*pi) * Hs^2 * Te,
+// which reduces to the widely used P ~= 0.5 * Hs^2 * Te (Hs in meters, Te
+// in seconds) — see Wikipedia's "Wave power" article. Te ("energy period")
+// is usually ~0.9x the peak/reported period, which is what swellP actually
+// is here. This is a real physical unit (kW/m, not an arbitrary index), and
+// it's genuinely useful for surf: it makes the intuition "a slow, tall
+// groundswell packs more punch than a fast, choppy windswell of the same
+// height" visible as a number instead of something you have to infer from
+// height and period separately.
+const WAVE_ENERGY_PERIOD_FACTOR = 0.9;
+function waveEnergyKwPerM(heightFt, periodS){
+  if(heightFt==null || periodS==null) return null;
+  const heightM = heightFt / 3.28084;
+  const energyPeriod = periodS * WAVE_ENERGY_PERIOD_FACTOR;
+  return 0.5 * heightM * heightM * energyPeriod;
+}
+function energyLabel(heightFt, periodS){
+  const kwPerM = waveEnergyKwPerM(heightFt, periodS);
+  if(kwPerM==null) return '';
+  return `~${kwPerM<10 ? kwPerM.toFixed(1) : Math.round(kwPerM)}kW/m`;
+}

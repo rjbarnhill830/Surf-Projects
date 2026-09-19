@@ -78,7 +78,7 @@ function render(){
         ${r.spot.notes ? `<div class="note" style="font-style:italic;margin-top:3px;">${r.spot.notes}</div>` : ''}
         ${r.favoriteBoost ? `<div class="note" style="margin-top:3px;">&#9733; Favorite &mdash; scored +${r.favoriteBoost}.</div>` : ''}
         ${(r.transmission!==1 || r.blockage!==1) ? `<div class="note" style="margin-top:3px;">${c.swellH}ft offshore &rarr; ~${r.localH}ft here (${[r.transmission!==1?`&times;${r.transmission} transmission`:null, r.blockage!==1?`&times;${r.blockage} off-angle blockage`:null].filter(Boolean).join(', ')})</div>` : ''}
-        ${r.swell2 && r.primarySwellIndex===2 ? `<div class="note" style="margin-top:3px;">Scored on Swell 2 (${c.swellH2}ft @ ${c.swellP2}s ${dirLabelDeg(c.swellDir2)}) &mdash; better aligned for this spot than Swell 1.</div>` : ''}
+        ${r.swell2 && r.primarySwellIndex===2 ? `<div class="note" style="margin-top:3px;">Scored on Swell 2 (${c.swellH2}ft @ ${c.swellP2}s ${dirLabelDeg(c.swellDir2)} &middot; ${energyLabel(c.swellH2,c.swellP2)}) &mdash; better aligned for this spot than Swell 1.</div>` : ''}
         ${r.tideDisqualified ? `<div class="note" style="color:var(--low);font-weight:600;margin-top:3px;">Disqualified &mdash; ${(r.outOfRange.find(m=>m.includes('tide restricted'))||'tide restricted')}.</div>` : r.outOfRange.length ? `<div class="note" style="color:var(--mid);margin-top:3px;">Outside ideal range &mdash; ${r.outOfRange.join(', ')}.</div>` : ''}
       </div>
       <div class="score" style="color:${barColor(r.score)}">${r.score}</div>
@@ -117,12 +117,12 @@ function renderForecastCompare(locId){
   const rows = [];
   if(readings.buoy){
     const b = readings.buoy;
-    rows.push(`<div class="sess"><div><b>Live NDBC buoy</b><div class="meta">${b.time} &middot; ${b.swellH}ft @ ${b.swellP}s ${dirLabelDeg(b.swellDir)}${b.windS!=null?`, wind ${b.windS}mph ${dirLabel(b.windDir)}`:''}</div></div></div>`);
+    rows.push(`<div class="sess"><div><b>Live NDBC buoy</b><div class="meta">${b.time} &middot; ${b.swellH}ft @ ${b.swellP}s ${dirLabelDeg(b.swellDir)} &middot; ${energyLabel(b.swellH,b.swellP)}${b.windS!=null?`, wind ${b.windS}mph ${dirLabel(b.windDir)}`:''}</div></div></div>`);
   }
   if(readings.openMeteo){
     const o = readings.openMeteo;
-    const swell2Text = o.swellH2!=null ? ` + ${o.swellH2}ft @ ${o.swellP2}s ${dirLabelDeg(o.swellDir2)}` : '';
-    rows.push(`<div class="sess"><div><b>Open-Meteo forecast</b><div class="meta">${o.time} &middot; ${o.swellH}ft @ ${o.swellP}s ${dirLabelDeg(o.swellDir)}${swell2Text}${o.windS!=null?`, wind ${o.windS}mph ${dirLabel(o.windDir)}`:''}</div></div></div>`);
+    const swell2Text = o.swellH2!=null ? ` + ${o.swellH2}ft @ ${o.swellP2}s ${dirLabelDeg(o.swellDir2)} &middot; ${energyLabel(o.swellH2,o.swellP2)}` : '';
+    rows.push(`<div class="sess"><div><b>Open-Meteo forecast</b><div class="meta">${o.time} &middot; ${o.swellH}ft @ ${o.swellP}s ${dirLabelDeg(o.swellDir)} &middot; ${energyLabel(o.swellH,o.swellP)}${swell2Text}${o.windS!=null?`, wind ${o.windS}mph ${dirLabel(o.windDir)}`:''}</div></div></div>`);
   }
   box.innerHTML = `<div class="sessions" style="margin-top:12px;">${rows.join('')}</div>`;
 }
@@ -136,10 +136,10 @@ function renderForecastCompare(locId){
 // depending on which hour happens to be hovered.
 function trendTooltipHtml(pt, hasSwell2){
   const rows = [
-    `<div class="tt-row"><i style="background:${CHART_SWELL1_COLOR}"></i><span class="tt-val">${pt.swellH}ft @ ${pt.swellP}s ${dirLabelDeg(pt.swellDir)}</span><span class="tt-label">${hasSwell2?'Swell 1':'Swell'}</span></div>`
+    `<div class="tt-row"><i style="background:${CHART_SWELL1_COLOR}"></i><span class="tt-val">${pt.swellH}ft @ ${pt.swellP}s ${dirLabelDeg(pt.swellDir)} &middot; ${energyLabel(pt.swellH,pt.swellP)}</span><span class="tt-label">${hasSwell2?'Swell 1':'Swell'}</span></div>`
   ];
   if(hasSwell2){
-    const swell2Val = pt.swellH2!=null ? `${pt.swellH2}ft @ ${pt.swellP2}s ${dirLabelDeg(pt.swellDir2)}` : 'not available';
+    const swell2Val = pt.swellH2!=null ? `${pt.swellH2}ft @ ${pt.swellP2}s ${dirLabelDeg(pt.swellDir2)} &middot; ${energyLabel(pt.swellH2,pt.swellP2)}` : 'not available';
     rows.push(`<div class="tt-row"><i style="background:${CHART_SWELL2_COLOR}"></i><span class="tt-val">${swell2Val}</span><span class="tt-label">Swell 2</span></div>`);
   }
   rows.push(`<div class="tt-row"><i style="background:${CHART_WIND_COLOR}"></i><span class="tt-val">${pt.windS!=null?pt.windS+'mph '+dirLabel(pt.windDir):'not available'}</span><span class="tt-label">Wind</span></div>`);
@@ -211,8 +211,8 @@ function renderOpenMeteoTrend(timeline, targetTime){
   details.appendChild(summary);
   const cellCls = i => `${dayStarts[i]?' day-start':''}${i===targetIdx?' trend-target':''}`;
   const headerCells = timeline.map((p,i)=>`<th class="${cellCls(i)}">${formatForecastTime(p.time)}</th>`).join('');
-  const swellRow = `<tr><td class="sticky-col">${hasSwell2?'Swell 1':'Swell'}</td>${timeline.map((p,i)=>`<td class="${cellCls(i)}">${p.swellH}ft @ ${p.swellP}s ${dirLabelDeg(p.swellDir)}</td>`).join('')}</tr>`;
-  const swell2Row = hasSwell2 ? `<tr><td class="sticky-col">Swell 2</td>${timeline.map((p,i)=>`<td class="${cellCls(i)}">${p.swellH2!=null?`${p.swellH2}ft @ ${p.swellP2}s ${dirLabelDeg(p.swellDir2)}`:'–'}</td>`).join('')}</tr>` : '';
+  const swellRow = `<tr><td class="sticky-col">${hasSwell2?'Swell 1':'Swell'}</td>${timeline.map((p,i)=>`<td class="${cellCls(i)}">${p.swellH}ft @ ${p.swellP}s ${dirLabelDeg(p.swellDir)} &middot; ${energyLabel(p.swellH,p.swellP)}</td>`).join('')}</tr>`;
+  const swell2Row = hasSwell2 ? `<tr><td class="sticky-col">Swell 2</td>${timeline.map((p,i)=>`<td class="${cellCls(i)}">${p.swellH2!=null?`${p.swellH2}ft @ ${p.swellP2}s ${dirLabelDeg(p.swellDir2)} &middot; ${energyLabel(p.swellH2,p.swellP2)}`:'–'}</td>`).join('')}</tr>` : '';
   const windRow = `<tr><td class="sticky-col">Wind</td>${timeline.map((p,i)=>`<td class="${cellCls(i)}">${p.windS!=null?p.windS+'mph '+dirLabel(p.windDir):'–'}</td>`).join('')}</tr>`;
   const tableWrap = document.createElement('div');
   tableWrap.className = 'fc-scroll';
