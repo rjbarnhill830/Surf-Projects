@@ -569,3 +569,9 @@ function dirLabel(deg){
 function dirLabelShort(deg){
   return COMPASS_NAMES[Math.round(deg/22.5)%16];
 }
+// Swell direction displays show the raw degree number alongside the compass
+// label ("WSW (247°)") since a swell's exact heading matters more precisely
+// than wind's does for judging how it'll hit a given spot's window.
+function dirLabelDeg(deg){
+  return `${dirLabel(deg)} (${Math.round(deg)}°)`;
+}

@@ -26,8 +26,8 @@ function renderSessions(){
     row.innerHTML=`
       <div>
         <b>${spotName}</b> &mdash; ${'&#9733;'.repeat(s.rating)}${'&#9734;'.repeat(5-s.rating)}
-        <div class="meta">${s.date} &middot; ${s.swellH}ft ${dirLabel(s.swellDir)} swell, ${s.windS}mph ${dirLabel(s.windDir)} wind, ${s.tide} tide${s.notes?' &middot; '+s.notes:''}</div>
-        ${s.forecast ? `<div class="meta" style="margin-top:3px;">Forecast at log time (${forecastSourceLabel(s.forecast)}): ${s.forecast.reading.swellH}ft @ ${s.forecast.reading.swellP}s ${dirLabel(s.forecast.reading.swellDir)}${s.forecast.reading.windS!=null?`, wind ${s.forecast.reading.windS}mph ${dirLabel(s.forecast.reading.windDir)}`:''} &mdash; vs. logged actual above</div>` : ''}
+        <div class="meta">${s.date} &middot; ${s.swellH}ft ${dirLabelDeg(s.swellDir)} swell, ${s.windS}mph ${dirLabel(s.windDir)} wind, ${s.tide} tide${s.notes?' &middot; '+s.notes:''}</div>
+        ${s.forecast ? `<div class="meta" style="margin-top:3px;">Forecast at log time (${forecastSourceLabel(s.forecast)}): ${s.forecast.reading.swellH}ft @ ${s.forecast.reading.swellP}s ${dirLabelDeg(s.forecast.reading.swellDir)}${s.forecast.reading.windS!=null?`, wind ${s.forecast.reading.windS}mph ${dirLabel(s.forecast.reading.windDir)}`:''} &mdash; vs. logged actual above</div>` : ''}
       </div>
       <button class="delbtn" data-id="${s.id}">Remove</button>
     `;

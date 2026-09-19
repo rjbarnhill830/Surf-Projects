@@ -154,8 +154,8 @@ function pointDetailHtml(pt, spot, tideByStation, fallbackStationId){
       <b>${formatForecastTime(pt.time)}</b>
       <button type="button" id="fcPointDetailClose" style="padding:2px 9px;">&times;</button>
     </div>
-    <div class="note" style="margin-top:6px;">${hasSwell2?'Swell 1':'Swell'}: ${pt.swellH}ft @ ${pt.swellP}s ${dirLabel(pt.swellDir)}</div>
-    ${hasSwell2 ? `<div class="note">Swell 2: ${pt.swellH2}ft @ ${pt.swellP2}s ${dirLabel(pt.swellDir2)}</div>` : ''}
+    <div class="note" style="margin-top:6px;">${hasSwell2?'Swell 1':'Swell'}: ${pt.swellH}ft @ ${pt.swellP}s ${dirLabelDeg(pt.swellDir)}</div>
+    ${hasSwell2 ? `<div class="note">Swell 2: ${pt.swellH2}ft @ ${pt.swellP2}s ${dirLabelDeg(pt.swellDir2)}</div>` : ''}
     <div class="note">Wind: ${pt.windS!=null?pt.windS+'mph '+dirLabel(pt.windDir):'not available'}</div>
     <div class="note">Tide: ${tideText}</div>
     ${scoreSection}
