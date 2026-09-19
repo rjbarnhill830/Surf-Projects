@@ -136,6 +136,19 @@ const WIND_ONSHORE_GATE_MAX_PENALTY = 0.65;
 const WIND_ONSHORE_GATE_POWER = 1.5;
 const WIND_ONSHORE_LABEL_ANGLE = 120;
 
+// How much a spot's own coastal exposure amplifies or dampens wind's
+// negative effects — reuses the exposure rating (open/moderate/sheltered)
+// already authored for every spot's swell-direction window rather than
+// adding a second, wind-specific rating to maintain, since the same
+// headland/reef/bay geography that shields a spot from open-ocean swell
+// typically shields it from wind chop too. Scales the onshore-wind gate,
+// the wind-speed taper, and the residual-chop gate below — never the base
+// windDirScore/windTol calibration, which stays per-spot as before.
+const WIND_EXPOSURE_MULTIPLIER = { sheltered: 0.6, moderate: 1, open: 1.35 };
+function windExposureMultiplier(spot){
+  return WIND_EXPOSURE_MULTIPLIER[spot.exposure] ?? 1;
+}
+
 // The current wind reading isn't the whole story — sustained onshore or
 // poorly-directed wind over the preceding hours churns the surface up
 // (windswell chop, disorganized texture), and that residue lingers even
@@ -408,17 +421,24 @@ function staticScore(spot,c){
   const windAngle = angDiff(c.windDir,spot.windDir);
   const windDirScore = Math.max(0,100-(windAngle/spot.windTol*100));
 
+  // Exposure scales how hard approaching/exceeding maxWind actually bites —
+  // a sheltered spot's floor sits higher (barely dips near its ceiling) and
+  // an open one's sits lower (feels it more), both centered on the same
+  // WIND_SPEED_TAPER_FLOOR_AT_MAX baseline a "moderate" spot already used.
+  const windExpMult = windExposureMultiplier(spot);
+  const windTaperFloorAtMax = 100 - (100-WIND_SPEED_TAPER_FLOOR_AT_MAX)*windExpMult;
+
   let windSpeedScore;
   if(c.windS<=spot.maxWind){
     const taperStart = spot.maxWind*WIND_SPEED_TAPER_START_FRACTION;
     if(c.windS>=taperStart && spot.maxWind>taperStart){
       const t = (c.windS-taperStart)/(spot.maxWind-taperStart);
-      windSpeedScore = 100 - t*(100-WIND_SPEED_TAPER_FLOOR_AT_MAX);
+      windSpeedScore = 100 - t*(100-windTaperFloorAtMax);
     }else{
       windSpeedScore = 100;
     }
   }else{
-    windSpeedScore = Math.max(0, WIND_SPEED_TAPER_FLOOR_AT_MAX - (c.windS-spot.maxWind)*8);
+    windSpeedScore = Math.max(0, windTaperFloorAtMax - (c.windS-spot.maxWind)*8*windExpMult);
   }
   const windScore = Math.max(0,Math.min(windDirScore,windSpeedScore));
 
@@ -448,17 +468,21 @@ function staticScore(spot,c){
   // WIND_ONSHORE_GATE_* above — so this multiplies the whole total down
   // based on the raw wind angle, independent of (and in addition to) the
   // per-spot-tolerance-based windScore already folded into the weighted sum
-  // below.
+  // below. Scaled by exposure same as the speed taper: a sheltered spot's
+  // geography (headland, bay, reef) typically blunts onshore chop, not just
+  // open-ocean swell, so its max penalty is capped lower; an open spot's
+  // goes higher. Clamped to 0.95 so even a fully open spot never has its
+  // gate alone zero out the score outright.
   const onshoreFraction = windAngle/180;
-  const windGate = 1 - WIND_ONSHORE_GATE_MAX_PENALTY*Math.pow(onshoreFraction, WIND_ONSHORE_GATE_POWER);
+  const windGate = 1 - Math.min(0.95, WIND_ONSHORE_GATE_MAX_PENALTY*windExpMult)*Math.pow(onshoreFraction, WIND_ONSHORE_GATE_POWER);
 
   // Residual chop from the preceding ~24h of wind (see windHistoryChoppiness
   // above) — only non-zero when the caller actually supplies a history to
   // look back through (c.windHistory), which only the Forecast timeline
   // does; the live "Current conditions" panel has no history and this is a
-  // silent no-op there.
+  // silent no-op there. Same exposure scaling as the other two wind gates.
   const priorChoppiness = windHistoryChoppiness(spot, c.windHistory, c.time);
-  const windHistoryGate = 1 - WIND_HISTORY_GATE_MAX_PENALTY*priorChoppiness;
+  const windHistoryGate = 1 - Math.min(0.95, WIND_HISTORY_GATE_MAX_PENALTY*windExpMult)*priorChoppiness;
   if(priorChoppiness>=0.4) outOfRange.push(`residual chop from recent onshore/poorly-directed wind &mdash; surface hasn't cleaned up yet`);
 
   let total;

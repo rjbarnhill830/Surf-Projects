@@ -206,6 +206,7 @@ function dirWindowFieldHtml(id, cur){
         </div>
         <button type="button" class="set-window-from-facing" data-spot-id="${id}">Set window from facing</button>
       </div>
+      <p class="buoynote" style="margin:-4px 0 10px;">Exposure also scales how harshly onshore wind and wind speed near this spot's ceiling get penalized &mdash; sheltered spots (headland, bay, reef) shrug off wind more than fully open ones.</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
         ${COMPASS_16.map(cp=>`
           <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--ink);margin-bottom:0;">
