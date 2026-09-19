@@ -19,12 +19,8 @@
     <h2>Forecast</h2>
     <p class="sub" style="margin-bottom:16px;">Pull a full swell + wind + tide outlook for a day, a few days, or the week ahead, and see which spot(s) are likely to be best and when.</p>
     <div class="panel">
+      <p class="buoynote">Each spot's forecast is automatically blended from this zone's regional reference points (buoy/model locations), weighted by distance to that spot &mdash; a spot near one reference point isn't scored off a different, farther one just because that's what's selected elsewhere.</p>
       <div class="grid">
-        <div>
-          <label>Location</label>
-          <select id="fcLocation"></select>
-          <p class="buoynote" id="fcLocationNote" style="margin-top:4px;">Defaults to the nearest buoy once a home location is set below &mdash; change anytime.</p>
-        </div>
         <div>
           <label>Range</label>
           <select id="fcRange">

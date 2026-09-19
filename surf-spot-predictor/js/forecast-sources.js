@@ -46,8 +46,9 @@ async function fetchNdbcBuoy(stationId){
 // Merges Open-Meteo's marine + wind hourly JSON into per-hour points, one
 // per timestamp that has at least valid primary swell data. Shared by
 // fetchOpenMeteoForecast (a single closest-hour reading, plus the full
-// timeline for the hourly trend table) and fetchForecastTimeline (the
-// week-ahead scoring grid) so both parse the same feed shape the same way.
+// timeline for the hourly trend table) and fetchBlendedForecastTimeline
+// (the week-ahead scoring grid, once per reference location) so all three
+// parse the same feed shape the same way.
 // The ocean usually has more than one swell running at once — Open-Meteo's
 // secondary partition, when present, is included alongside the primary; a
 // missing/zero reading just means no second swell that hour, not bad data.
@@ -129,7 +130,7 @@ async function fetchOpenMeteoForecast(lat, lon, hourOffset){
 // beginDateStr/endDateStr are "YYYY-MM-DD" in the forecast location's own
 // local time (i.e. taken straight from the swell timeline's own date
 // strings) — NOT computed from the browser's clock, for the same reason
-// noted below in fetchForecastTimeline. The request pads one extra day on
+// noted below in fetchBlendedForecastTimeline. The request pads one extra day on
 // each side so every timeline point has a real high/low bracketing it on
 // both sides to interpolate between (see interpolateTideCurve).
 async function fetchTideExtrema(stationId, beginDateStr, endDateStr){
@@ -208,8 +209,8 @@ function interpolateTideCurve(extrema, targetTimes){
 }
 
 // Fetches and interpolates the full tide curve for one station across the
-// given target times in one call — the unit fetchForecastTimeline uses per
-// unique tideStation among the spots being scored.
+// given target times in one call — the unit fetchBlendedForecastTimeline
+// uses per unique tideStation among the spots being scored.
 async function fetchTidePredictions(stationId, beginDateStr, endDateStr, targetTimes){
   const extrema = await fetchTideExtrema(stationId, beginDateStr, endDateStr);
   return interpolateTideCurve(extrema, targetTimes);
@@ -260,20 +261,159 @@ function sunTimesLocalMinutes(dateStr, lat, lon, utcOffsetSeconds){
   return { sunriseMin: toLocalMinutes(sun.sunrise), sunsetMin: toLocalMinutes(sun.sunset) };
 }
 
-// Full hourly swell + wind timeline for a reference location, merged by
-// timestamp into the same shape scoreSpot() expects (minus tide, which is
-// now fetched separately per station — see tideByStation below, since tide
-// genuinely varies spot-to-spot and a single shared curve for the whole
-// region isn't precise enough).
+// Finds whichever reference location sits closest to a spot's own
+// coordinates — used both as the IDW blend's dominant weight and as the
+// fallback tide station for a spot that doesn't set its own tideStation.
+// A spot with no coordinates (a custom spot added without a location) has
+// no way to judge closeness, so it just falls back to the first location
+// rather than guessing.
+function nearestForecastLocation(spot, locations){
+  if(spot.lat==null || spot.lon==null) return locations[0];
+  let best = null, bestDist = Infinity;
+  locations.forEach(loc=>{
+    const d = distanceMiles(spot.lat, spot.lon, loc.lat, loc.lon);
+    if(d<bestDist){ bestDist = d; best = loc; }
+  });
+  return best;
+}
+
+// Inverse-distance weighting: nearby reference points dominate a spot's
+// blended forecast, farther ones fade out fast (power=2, i.e. weighted by
+// 1/distance^2) rather than lingering — a point 60mi away should barely
+// register once a much closer one exists. MIN_DISTANCE_MI floors the
+// denominator so a spot that happens to sit right on top of a reference
+// point's own coordinates doesn't produce a divide-by-zero weight.
+const BLEND_IDW_POWER = 2;
+const BLEND_MIN_DISTANCE_MI = 1;
+function blendWeights(spot, locations){
+  if(spot.lat==null || spot.lon==null){
+    // No coordinates to weight by — spread evenly rather than crashing or
+    // silently picking one location.
+    const w = 1/locations.length;
+    return locations.map(()=>w);
+  }
+  const raw = locations.map(loc=>{
+    const d = Math.max(BLEND_MIN_DISTANCE_MI, distanceMiles(spot.lat, spot.lon, loc.lat, loc.lon));
+    return 1/Math.pow(d, BLEND_IDW_POWER);
+  });
+  const total = raw.reduce((a,b)=>a+b, 0);
+  return raw.map(w=>w/total);
+}
+
+// Weighted mean of a scalar (height, period, speed) that tolerates missing
+// values — a location without a reading for this particular hour/field
+// (rather than every hour, which buildOpenMeteoTimeline already handles)
+// just drops out and the remaining weights are used as given by the caller
+// (already renormalized among only the locations that have data).
+function weightedMean(values, weights){
+  let sum = 0, wsum = 0;
+  values.forEach((v,i)=>{
+    if(v==null) return;
+    sum += weights[i]*v;
+    wsum += weights[i];
+  });
+  return wsum>0 ? sum/wsum : null;
+}
+
+// Weighted mean of an angle that wraps at 0/360 (direction fields) — a
+// plain weighted average of e.g. 350deg and 10deg would give 180deg (due
+// south!) instead of the correct ~0deg, so this averages the unit vectors
+// instead and converts back to an angle.
+function circularWeightedMean(angles, weights){
+  let x = 0, y = 0, wsum = 0;
+  angles.forEach((a,i)=>{
+    if(a==null) return;
+    x += weights[i]*Math.cos(a*Math.PI/180);
+    y += weights[i]*Math.sin(a*Math.PI/180);
+    wsum += weights[i];
+  });
+  if(wsum===0) return null;
+  return ((Math.atan2(y,x)*180/Math.PI)+360)%360;
+}
+
+// Blends every reference location's own hourly timeline into one timeline
+// customized for this spot's coordinates — an inverse-distance-weighted
+// average at each timestamp, rather than the whole grid scoring off
+// whichever single reference point the user happened to have selected.
+// allTimes is the canonical, fetch-level union of every location's
+// timestamps (see fetchBlendedForecastTimeline) so every spot's blended
+// array lines up one-to-one by index regardless of whether some location
+// happens to be missing an odd hour. A location missing a given hour just
+// drops out of that hour's blend (weights renormalized among whichever
+// locations do have it); an hour where literally none of them have data
+// is dropped from the result entirely, the same as buildOpenMeteoTimeline
+// already does for a single location.
+function blendTimelineForSpot(spot, timelinesByLocationId, locations, allTimes){
+  const weights = blendWeights(spot, locations);
+  const pointsByTime = {};
+  locations.forEach((loc,i)=>{
+    (timelinesByLocationId[loc.id]||[]).forEach(pt=>{
+      if(!pointsByTime[pt.time]) pointsByTime[pt.time] = [];
+      pointsByTime[pt.time][i] = pt;
+    });
+  });
+
+  const blendField = (pts, idxList, valueFn, isAngle) => {
+    if(idxList.length===0) return null;
+    const w = idxList.map(i=>weights[i]);
+    const total = w.reduce((a,b)=>a+b, 0);
+    const wNorm = w.map(x=>x/total);
+    const values = idxList.map(i=>valueFn(pts[i]));
+    return isAngle ? circularWeightedMean(values, wNorm) : weightedMean(values, wNorm);
+  };
+
+  return allTimes.map(time=>{
+    const pts = pointsByTime[time] || [];
+    const idx = locations.map((_,i)=>i).filter(i=>pts[i]);
+    const swellH = blendField(pts, idx, p=>p.swellH, false);
+    const swellP = blendField(pts, idx, p=>p.swellP, false);
+    const swellDir = blendField(pts, idx, p=>p.swellDir, true);
+    if(swellH==null || swellP==null || swellDir==null) return null;
+
+    // Swell 2 only blends across locations that actually report a
+    // secondary partition that hour — a location with none contributes
+    // nothing rather than dragging the blended height toward zero.
+    const swell2Idx = idx.filter(i=>pts[i].swellH2!=null);
+    const swellH2 = blendField(pts, swell2Idx, p=>p.swellH2, false);
+    const swellP2 = blendField(pts, swell2Idx, p=>p.swellP2, false);
+    const swellDir2 = blendField(pts, swell2Idx, p=>p.swellDir2, true);
+
+    const windIdx = idx.filter(i=>pts[i].windS!=null && pts[i].windDir!=null);
+    const windSRaw = blendField(pts, windIdx, p=>p.windS, false);
+    const windDirRaw = blendField(pts, windIdx, p=>p.windDir, true);
+
+    return {
+      time,
+      swellH: Math.round(swellH*10)/10,
+      swellP: Math.round(swellP),
+      swellDir: Math.round(swellDir),
+      swellH2: swellH2!=null ? Math.round(swellH2*10)/10 : null,
+      swellP2: swellP2!=null ? Math.round(swellP2) : null,
+      swellDir2: swellDir2!=null ? Math.round(swellDir2) : null,
+      windS: windSRaw!=null ? Math.round(windSRaw) : null,
+      windDir: windDirRaw!=null ? Math.round(windDirRaw) : null
+    };
+  }).filter(Boolean);
+}
+
+// Fetches every configured reference location's own swell+wind timeline in
+// parallel, then leaves the per-spot blending to blendTimelineForSpot() —
+// a spot near Bodega Bay and a spot near Point Santa Cruz genuinely see
+// different swell (different exposure, different nearest wave-model grid
+// cell), so scoring the whole coastline off one manually-picked point was
+// producing "dramatically different results" purely from which single
+// point happened to be selected. Blending per spot's own coordinates
+// against all reference points (weighted by distance) fixes that without
+// needing the user to pick anything.
 //
-// spots is the list of spot objects being scored against this location
-// (activeSpots from ui-forecast.js) — used only to collect the distinct
-// tideStation IDs actually in use, so each one is fetched once regardless of
-// how many spots share it. tideByStation is {[stationId]: {byTime, error}};
-// a station whose fetch fails still returns an entry (byTime: {}, error: message)
-// rather than being omitted, so callers can tell "no station configured" apart
-// from "station configured but the fetch failed".
-async function fetchForecastTimeline(location, days, spots){
+// spots is the list of spot objects being scored (activeSpots from
+// ui-forecast.js) — used only to collect the distinct tideStation IDs
+// actually in use, so each one is fetched once regardless of how many
+// spots share it. tideByStation is {[stationId]: {byTime, error}}; a
+// station whose fetch fails still returns an entry (byTime: {}, error:
+// message) rather than being omitted, so callers can tell "no station
+// configured" apart from "station configured but the fetch failed".
+async function fetchBlendedForecastTimeline(locations, days, spots){
   // past_days=1 pulls in the prior day's (modeled, not observed — Open-Meteo
   // docs are explicit that past_days on the forecast endpoints returns past
   // *forecasts*, same as everything else this app already uses) hourly wind
@@ -283,27 +423,33 @@ async function fetchForecastTimeline(location, days, spots){
   // at. The display-side reachability/daylight filters in ui-forecast.js
   // already drop anything before "now", so these extra hours never show up
   // as rows/columns — they're only used for lookback.
-  const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${location.lat}&longitude=${location.lon}&hourly=swell_wave_height,swell_wave_period,swell_wave_direction,secondary_swell_wave_height,secondary_swell_wave_period,secondary_swell_wave_direction&timezone=auto&forecast_days=${days}&past_days=1`;
-  const windUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&hourly=windspeed_10m,winddirection_10m&wind_speed_unit=mph&timezone=auto&forecast_days=${days}&past_days=1`;
+  const fetchOne = async loc => {
+    const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${loc.lat}&longitude=${loc.lon}&hourly=swell_wave_height,swell_wave_period,swell_wave_direction,secondary_swell_wave_height,secondary_swell_wave_period,secondary_swell_wave_direction&timezone=auto&forecast_days=${days}&past_days=1`;
+    const windUrl = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&hourly=windspeed_10m,winddirection_10m&wind_speed_unit=mph&timezone=auto&forecast_days=${days}&past_days=1`;
+    const [marineRes, windRes] = await Promise.all([fetch(marineUrl), fetch(windUrl)]);
+    if(!marineRes.ok) throw new Error(`Open-Meteo marine request failed for ${loc.label} (HTTP ${marineRes.status}).`);
+    if(!windRes.ok) throw new Error(`Open-Meteo wind request failed for ${loc.label} (HTTP ${windRes.status}).`);
+    const marine = await marineRes.json();
+    const wind = await windRes.json();
+    return { timeline: buildOpenMeteoTimeline(marine, wind), utcOffsetSeconds: marine.utc_offset_seconds || 0 };
+  };
 
-  let marineRes, windRes;
+  let results;
   try{
-    [marineRes, windRes] = await Promise.all([fetch(marineUrl), fetch(windUrl)]);
+    results = await Promise.all(locations.map(fetchOne));
   }catch(e){
     throw new Error(`Could not reach Open-Meteo (${e.message}).`);
   }
-  if(!marineRes.ok) throw new Error(`Open-Meteo marine request failed (HTTP ${marineRes.status}).`);
-  if(!windRes.ok) throw new Error(`Open-Meteo wind request failed (HTTP ${windRes.status}).`);
-  const marine = await marineRes.json();
-  const wind = await windRes.json();
-  const timeline = buildOpenMeteoTimeline(marine, wind);
-  if(timeline.length===0) throw new Error('Open-Meteo returned no forecast data for that location.');
 
-  const allTimes = timeline.map(pt=>pt.time);
+  const timelinesByLocationId = {};
+  locations.forEach((loc,i)=>{ timelinesByLocationId[loc.id] = results[i].timeline; });
+  const allTimes = [...new Set(results.flatMap(r=>r.timeline.map(pt=>pt.time)))].sort();
+  if(allTimes.length===0) throw new Error('Open-Meteo returned no forecast data for any reference location.');
+
   const beginDateStr = allTimes[0].slice(0,10);
   const endDateStr = allTimes[allTimes.length-1].slice(0,10);
   const stationIds = new Set((spots||[]).map(s=>s.tideStation).filter(Boolean));
-  if(location.tideStation) stationIds.add(location.tideStation);
+  locations.forEach(loc=>{ if(loc.tideStation) stationIds.add(loc.tideStation); });
 
   const tideByStation = {};
   await Promise.all([...stationIds].map(async stationId=>{
@@ -314,20 +460,24 @@ async function fetchForecastTimeline(location, days, spots){
     }
   }));
 
-  const fallback = location.tideStation ? tideByStation[location.tideStation] : null;
-
-  const utcOffsetSeconds = marine.utc_offset_seconds || 0;
+  // Sunrise/sunset shifts by only a few minutes across this coastline's
+  // ~2 degrees of latitude — negligible next to the 30/90min dawn/dusk
+  // buffers already in play — so daylight is computed once from the
+  // reference points' geographic centroid rather than per spot.
+  const utcOffsetSeconds = results[0].utcOffsetSeconds;
+  const centroidLat = locations.reduce((s,l)=>s+l.lat, 0)/locations.length;
+  const centroidLon = locations.reduce((s,l)=>s+l.lon, 0)/locations.length;
   const daylightByDate = {};
-  [...new Set(timeline.map(pt=>pt.time.slice(0,10)))].forEach(dateStr=>{
-    daylightByDate[dateStr] = sunTimesLocalMinutes(dateStr, location.lat, location.lon, utcOffsetSeconds);
+  [...new Set(allTimes.map(t=>t.slice(0,10)))].forEach(dateStr=>{
+    daylightByDate[dateStr] = sunTimesLocalMinutes(dateStr, centroidLat, centroidLon, utcOffsetSeconds);
   });
 
   return {
-    timeline,
+    timelinesByLocationId,
+    locations,
+    allTimes,
     tideByStation,
-    fallbackStationId: location.tideStation || null,
-    tideAvailable: !!fallback && !fallback.error,
-    tideError: fallback ? fallback.error : null,
+    tideAvailable: Object.values(tideByStation).some(v=>!v.error),
     daylightByDate,
     utcOffsetSeconds
   };

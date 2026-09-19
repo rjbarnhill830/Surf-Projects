@@ -77,7 +77,6 @@ async function switchZone(zoneId){
   renderSessions();
   refreshLogSpotOptions();
   refreshForecastLocationOptions();
-  refreshForecastSectionLocations();
   resetForecastSection();
   updateZoneNote();
   toggleNorcalOnlySections();
