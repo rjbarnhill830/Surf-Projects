@@ -2,7 +2,7 @@
 // marker, so spots can be browsed geographically and clicking one jumps
 // straight to its edit card below — a companion to the single-spot
 // "Pick on map" picker in map-picker.js, which sets one spot's coordinates
-// rather than browsing all of them. Reuses MAP_PICKER_ZONE_CENTER from
+// rather than browsing all of them. Reuses MAP_PICKER_DEFAULT_CENTER from
 // map-picker.js for a sensible default view when no spot has coordinates
 // yet, and follows the same lazy-init/try-catch pattern as that file so a
 // blocked or slow Leaflet CDN load degrades gracefully instead of crashing
@@ -112,8 +112,8 @@ function spotsOverviewPopupHtml(spot){
 }
 
 // Called at the end of every renderConfigCards() — startup, save, reset,
-// add, delete, or a zone switch — so the markers always match whatever's
-// currently in activeSpots.
+// add, or delete — so the markers always match whatever's currently in
+// activeSpots.
 function renderSpotsOverviewMap(){
   const container = document.getElementById('spotsOverviewMap');
   const addBtn = document.getElementById('addSpotByMapClick');
@@ -142,8 +142,7 @@ function renderSpotsOverviewMap(){
   if(located.length>0){
     spotsOverviewLeaflet.fitBounds(L.latLngBounds(located.map(s=>[s.lat,s.lon])), {padding:[30,30], maxZoom:12});
   }else{
-    const center = MAP_PICKER_ZONE_CENTER[currentZoneId] || MAP_PICKER_ZONE_CENTER.norcal;
-    spotsOverviewLeaflet.setView(center, 8);
+    spotsOverviewLeaflet.setView(MAP_PICKER_DEFAULT_CENTER, 8);
   }
   // Same reasoning as map-picker.js's invalidateSize() call: the container
   // may not have had its final layout size yet the first time this runs.

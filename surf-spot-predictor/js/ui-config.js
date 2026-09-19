@@ -25,27 +25,27 @@ function buildActiveSpots(){
 
 async function loadOverrides(){
   try{
-    const res = await storage.get(zoneKey('spot-overrides'));
+    const res = await storage.get('spot-overrides');
     overrides = res && res.value ? JSON.parse(res.value) : {};
   }catch(e){ overrides = {}; }
   buildActiveSpots();
 }
 
 async function persistOverrides(){
-  try{ await storage.set(zoneKey('spot-overrides'), JSON.stringify(overrides)); }
+  try{ await storage.set('spot-overrides', JSON.stringify(overrides)); }
   catch(e){ console.error('could not save overrides', e); }
 }
 
 async function loadCustomSpots(){
   try{
-    const res = await storage.get(zoneKey('custom-spots'));
+    const res = await storage.get('custom-spots');
     customSpots = res && res.value ? JSON.parse(res.value) : [];
   }catch(e){ customSpots = []; }
   buildActiveSpots();
 }
 
 async function persistCustomSpots(){
-  try{ await storage.set(zoneKey('custom-spots'), JSON.stringify(customSpots)); }
+  try{ await storage.set('custom-spots', JSON.stringify(customSpots)); }
   catch(e){ console.error('could not save custom spots', e); }
 }
 

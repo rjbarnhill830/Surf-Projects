@@ -8,13 +8,10 @@ let mapPickerMarker = null;
 let mapPickerTargetLatInput = null;
 let mapPickerTargetLonInput = null;
 
-// Rough center for each zone's coastline, used only when a spot has no
+// Rough center of the NorCal coastline, used only when a spot has no
 // coordinates yet (so the map opens somewhere relevant instead of the
 // middle of the ocean or off the coast entirely).
-const MAP_PICKER_ZONE_CENTER = {
-  norcal: [37.6, -122.5],
-  portugal: [39.0, -9.4]
-};
+const MAP_PICKER_DEFAULT_CENTER = [37.6, -122.5];
 const MAP_PICKER_DEFAULT_ZOOM = 9;
 const MAP_PICKER_SPOT_ZOOM = 13;
 
@@ -45,7 +42,7 @@ function ensureMapPickerInitialized(){
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(mapPickerLeaflet);
-  mapPickerMarker = L.marker(MAP_PICKER_ZONE_CENTER.norcal, {draggable:true, icon:mapPickerIcon}).addTo(mapPickerLeaflet);
+  mapPickerMarker = L.marker(MAP_PICKER_DEFAULT_CENTER, {draggable:true, icon:mapPickerIcon}).addTo(mapPickerLeaflet);
   mapPickerMarker.on('dragend', updateMapPickerCoordsDisplay);
   mapPickerLeaflet.on('click', e=>{
     mapPickerMarker.setLatLng(e.latlng);
@@ -80,7 +77,7 @@ function openMapPicker(latInputId, lonInputId, headerText){
   const curLat = +mapPickerTargetLatInput.value;
   const curLon = +mapPickerTargetLonInput.value;
   const hasCur = mapPickerTargetLatInput.value!=='' && mapPickerTargetLonInput.value!=='' && !isNaN(curLat) && !isNaN(curLon);
-  const center = hasCur ? [curLat, curLon] : (MAP_PICKER_ZONE_CENTER[currentZoneId] || MAP_PICKER_ZONE_CENTER.norcal);
+  const center = hasCur ? [curLat, curLon] : MAP_PICKER_DEFAULT_CENTER;
 
   document.getElementById('mapPickerOverlay').style.display = 'flex';
   mapPickerMarker.setLatLng(center);

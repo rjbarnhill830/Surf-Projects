@@ -213,7 +213,7 @@ function renderForecastResults(fetchResult){
   }
 
   // Each spot gets its own forecast, blended (inverse-distance-weighted)
-  // from all of the zone's reference points rather than every spot sharing
+  // from all of the app's reference points rather than every spot sharing
   // one manually-picked location's numbers — a spot near Bodega Bay and one
   // near Point Santa Cruz genuinely see different swell. fullBySpot keeps
   // the *entire* fetched window (including the past_days=1 hours) so it can
@@ -337,7 +337,7 @@ function renderForecastResults(fetchResult){
 
   const gridBox = document.createElement('div');
   gridBox.innerHTML = '<h3 class="fc-heading">Spot scores by time</h3>' + scrollHintHtml(headerPoints)
-    + '<p class="buoynote" style="margin:0 0 6px;">Click any score for the full swell/wind/tide breakdown. Each spot\'s forecast is blended from the zone\'s reference points, weighted by distance to that spot.'
+    + '<p class="buoynote" style="margin:0 0 6px;">Click any score for the full swell/wind/tide breakdown. Each spot\'s forecast is blended from this app\'s reference points, weighted by distance to that spot.'
     + (hiddenColumnCount>0 ? ` ${hiddenColumnCount} time${hiddenColumnCount===1?'':'s'} hidden &mdash; no spot reaches a score of ${minScore} then.` : '')
     + (minScore>0 ? ` Only showing scores &ge; ${minScore}.` : '')
     + (sortModeLabel ? ` Rows sorted ${sortModeLabel}.` : '') + '</p>';
@@ -383,7 +383,7 @@ function renderForecastResults(fetchResult){
       });
       note.textContent = `Tide data unavailable for ${spotNames.size ? [...spotNames].join(', ') : 'some spots'} (${failedStations.map(([,v])=>v.error).join(' ')}) — those scores don't factor in tide.`;
     }else{
-      note.textContent = 'No tide source configured for this zone yet — scores above don\'t factor in tide.';
+      note.textContent = 'No tide source configured yet — scores above don\'t factor in tide.';
     }
     resultsEl.appendChild(note);
   }

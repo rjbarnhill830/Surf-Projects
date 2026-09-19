@@ -19,7 +19,7 @@
     <h2>Forecast</h2>
     <p class="sub" style="margin-bottom:16px;">Pull a full swell + wind + tide outlook for a day, a few days, or the week ahead, and see which spot(s) are likely to be best and when.</p>
     <div class="panel">
-      <p class="buoynote">Each spot's forecast is automatically blended from this zone's regional reference points (buoy/model locations), weighted by distance to that spot &mdash; a spot near one reference point isn't scored off a different, farther one just because that's what's selected elsewhere.</p>
+      <p class="buoynote">Each spot's forecast is automatically blended from this app's regional reference points (buoy/model locations), weighted by distance to that spot &mdash; a spot near one reference point isn't scored off a different, farther one just because that's what's selected elsewhere.</p>
       <div class="grid">
         <div>
           <label>Range</label>
@@ -344,18 +344,6 @@
     </details>
   </section>
 
-  <!-- Not needed day-to-day right now (only one zone is really in active
-       use) — kept for future multi-region development, tucked down here
-       instead of top-of-page real estate. -->
-  <section>
-    <h2>Search an area</h2>
-    <div class="panel">
-      <label>Region</label>
-      <select id="zoneSelect"></select>
-      <p class="buoynote" id="zoneNote"></p>
-    </div>
-  </section>
-
   <p class="footer-note">This is a heuristic model, not a trained forecast &mdash; it encodes published spot guidance, not verified wave-by-wave outcomes. Session and spot-profile data is stored locally in this browser and isn't sent anywhere. Loading a live buoy or forecast reading does call NDBC's and Open-Meteo's public APIs directly from your browser.</p>
 </div>
 
@@ -378,7 +366,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/data.js"></script>
-<script src="js/zones.js"></script>
 <script src="js/imported-sessions.js"></script>
 <script src="js/scoring.js"></script>
 <script src="js/forecast-sources.js"></script>

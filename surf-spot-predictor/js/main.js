@@ -1,3 +1,34 @@
+// One-time, idempotent: this app briefly had a multi-region "zone" feature
+// (since removed) that scoped all user data under zone:norcal:<key> so a
+// second demo region's data wouldn't mix with NorCal's. Since that feature
+// only ever ran against a real zone-scoped store, mirrors any such data back
+// onto the plain keys the app uses now (overwriting a stale plain copy, if
+// one exists from even further back, since the zone-scoped keys were the
+// actively-written ones for as long as that feature was live) — without
+// touching or deleting the zone-scoped originals, so nothing accumulated
+// during that period appears to have vanished. Safe to run on every load:
+// once the plain keys catch up, re-copying the same value is a no-op.
+async function migrateZoneScopedStorage(){
+  try{
+    const mirror = async (zoneScopedKey, plainKey) => {
+      const scoped = await storage.get(zoneScopedKey);
+      if(scoped && scoped.value) await storage.set(plainKey, scoped.value);
+    };
+    await mirror('zone:norcal:spot-overrides', 'spot-overrides');
+    await mirror('zone:norcal:custom-spots', 'custom-spots');
+    await mirror('zone:norcal:home-location', 'home-location');
+    const scopedSessions = await storage.list('zone:norcal:sessions:');
+    if(scopedSessions && scopedSessions.keys){
+      for(const k of scopedSessions.keys){
+        const id = k.slice('zone:norcal:sessions:'.length);
+        await mirror(k, 'sessions:'+id);
+      }
+    }
+  }catch(e){
+    console.error('zone-scoped storage migration failed', e);
+  }
+}
+
 function render(){
   const c = {
     swellH:+document.getElementById('swellH').value,
@@ -92,8 +123,7 @@ function render(){
 // session list can show forecast-vs-actual for validation.
 let lastForecastSnapshot = null;
 // Readings loaded per location, so both sources can be shown side by side
-// once you've pulled each at least once for that location. Cleared on zone
-// switch by switchZone() in js/zones.js.
+// once you've pulled each at least once for that location.
 let loadedReadings = {};
 
 function applyReadingToConditions(reading){
@@ -315,7 +345,7 @@ function initConditionsPanel(){
 }
 
 (async ()=>{
-  await migrateLegacyNorcalStorage();
+  await migrateZoneScopedStorage();
   await loadUserSkillLevel();
   await loadCustomSpots();
   await loadOverrides();
@@ -332,7 +362,6 @@ function initConditionsPanel(){
   initLocationPanel();
   initMapPicker();
   initSpotsOverviewMap();
-  initZonePicker();
   initSpreadsheetImport(async ()=>{ await loadSessions(); renderSessions(); render(); });
   render();
 })();

@@ -1,11 +1,7 @@
-// Skill level is a trait of the person, not the surf zone, so it's stored
-// under a plain (non zone-scoped) key and persists across zone switches.
-// Wave style is treated more like a "mood for today" and isn't persisted —
-// it resets to no-preference on reload, same as the current-conditions
-// sliders. Home location is also a durable trait (where you actually live),
-// same persistence treatment as skill level — but it's a NorCal-only concept
-// (the Ranked-spots distance filter only exists there), so it's zone-scoped
-// rather than global like skill level.
+// Skill level and home location are durable traits of the person and persist
+// across reloads. Wave style is treated more like a "mood for today" and
+// isn't persisted — it resets to no-preference on reload, same as the
+// current-conditions sliders.
 let userSkillLevel = 'advanced';
 let userWaveStyles = [];
 let userHomeLat = null;
@@ -25,7 +21,7 @@ async function persistUserSkillLevel(){
 
 async function loadHomeLocation(){
   try{
-    const res = await storage.get(zoneKey('home-location'));
+    const res = await storage.get('home-location');
     const parsed = res && res.value ? JSON.parse(res.value) : null;
     if(parsed && typeof parsed.lat==='number' && typeof parsed.lon==='number'){
       userHomeLat = parsed.lat; userHomeLon = parsed.lon;
@@ -36,7 +32,7 @@ async function loadHomeLocation(){
 }
 
 async function persistHomeLocation(){
-  try{ await storage.set(zoneKey('home-location'), JSON.stringify({lat:userHomeLat, lon:userHomeLon})); }
+  try{ await storage.set('home-location', JSON.stringify({lat:userHomeLat, lon:userHomeLon})); }
   catch(e){ console.error('could not save home location', e); }
 }
 
@@ -66,9 +62,7 @@ function initPreferencesPanel(){
 }
 
 // Re-syncs the lat/lon inputs and note to whatever userHomeLat/userHomeLon
-// currently hold — called on init and again after a zone switch, since home
-// location is zone-scoped (Portugal's own location, if ever set, is
-// separate from NorCal's) but the input elements are shared DOM nodes.
+// currently hold.
 function refreshLocationPanelInputs(){
   const latInput = document.getElementById('homeLat');
   const lonInput = document.getElementById('homeLon');

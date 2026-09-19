@@ -8,7 +8,7 @@ function forecastSourceLabel(f){
 
 async function loadSessions(){
   try{
-    const list = await storage.list(zoneKey('sessions:'));
+    const list = await storage.list('sessions:');
     if(!list || !list.keys || list.keys.length===0){ sessionCache=[]; return; }
     const items = await Promise.all(list.keys.map(k=>storage.get(k).catch(()=>null)));
     sessionCache = items.filter(Boolean).map(i=>JSON.parse(i.value)).sort((a,b)=>b.date.localeCompare(a.date));
@@ -35,7 +35,7 @@ function renderSessions(){
   });
   box.querySelectorAll('.delbtn').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
-      try{ await storage.delete(zoneKey('sessions:'+btn.dataset.id)); }catch(e){}
+      try{ await storage.delete('sessions:'+btn.dataset.id); }catch(e){}
       await loadSessions(); renderSessions(); render();
     });
   });
@@ -88,7 +88,7 @@ function initSessionLogForm(){
     };
     if(lastForecastSnapshot) session.forecast = lastForecastSnapshot;
     try{
-      await storage.set(zoneKey('sessions:'+id), JSON.stringify(session));
+      await storage.set('sessions:'+id, JSON.stringify(session));
       msg.style.color='var(--good)'; msg.textContent='Session logged.'+(session.forecast?' Forecast snapshot attached for comparison.':'');
       document.getElementById('logNotes').value='';
       selectedRating=0;
@@ -109,9 +109,9 @@ async function runBulkImport(sessions, buttonId, msgId, importingLabel, idleLabe
   let added = 0, skippedDup = 0;
   for(const s of sessions){
     try{
-      const existing = await storage.get(zoneKey('sessions:'+s.id)).catch(()=>null);
+      const existing = await storage.get('sessions:'+s.id).catch(()=>null);
       if(existing){ skippedDup++; continue; }
-      await storage.set(zoneKey('sessions:'+s.id), JSON.stringify(s));
+      await storage.set('sessions:'+s.id, JSON.stringify(s));
       added++;
     }catch(e){ /* skip on error */ }
   }
